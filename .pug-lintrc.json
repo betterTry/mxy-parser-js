@@ -1,0 +1,8 @@
+{
+  "disallowSpacesInsideAttributeBrackets": true,
+  "validateAttributeQuoteMarks": "\"",
+  "validateAttributeSeparator": {
+    "separator": " ",
+    "multiLineSeparator": "\n"
+  }
+}
