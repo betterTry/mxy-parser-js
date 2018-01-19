@@ -1,32 +1,49 @@
 import {KEY_WORDS, RESERVED_WORDS, KEY_WORDS_BEFORE_EXPRESSION, KEYWORDS_ATOM, OPERATOR_CHARS, RE_HEX_NUMBER, RE_OCT_NUMBER, RE_DEC_NUMBER, OPERATORS, WHITESPACE_CHARS, PUNC_BEFORE_EXPRESSION, PUNC_CHARS, REGEXP_MODIFIERS, UNICODE} from '../constant';
 
 
-exports function characters(string) {
+export function characters(string) {
   return string.split('');
 }
 
-exports function hit_reg(reg, target) {
+export function hit_reg(reg, target) {
   return reg.test(target);
 }
 
-exports function hit_obj(obj, prop) {
+export function hit_obj(obj, prop) {
   return Object.prototype.hasOwnProperty.call(obj, prop);
 }
 
-exports function is_digit(ch) {
+export function is_digit(ch) {
   ch = ch.charCodeAt(0)
   return ch >= 48 && ch <= 57;
 }
 
-exports function is_letter(ch) {
+export function is_letter(ch) {
   return hit_reg(UNICODE.letter, ch);
 }
 
-exports function is_alphanumeric_char(ch) {
+export function is_alphanumeric_char(ch) {
   return is_digit(ch) || is_letter(ch);
 }
 
-exports function parse_js_number(num) {
+export function is_identifier_start(ch) {
+  return ch == '_' || ch == '$' || is_letter(ch);
+}
+
+export function is_valid_name_char() {
+  return is_identifier_start(ch) || is_digit(ch);
+}
+
+export function is_identifier_char(ch) {
+  return is_identifier_start(ch)
+      || hit_reg(UNICODE.combining_mark, ch)
+      || hit_reg(UNICODE.digit)
+      || hit_reg(UNICODE.connector_punctuation, ch)
+      || ch == '\u200c' // zero-width non-joiner <ZWNJ>
+      || ch == '\u200d'; // zero-width joiner <ZWJ> (in my ECMA-262 PDF, this is also 200c)
+}
+
+export function parse_js_number(num) {
   if (hit_reg(RE_HEX_NUMBER, num)) { // 16进制;
     return parseInt(num.substr(2), 16);
   } else if (hit_reg(RE_OCT_NUMBER, num)) { // 8进制;
@@ -34,4 +51,20 @@ exports function parse_js_number(num) {
   } else if (hit_reg(RE_DEC_NUMBER, num)) {
     return parseFloat(num);
   }
+}
+
+export function array_to_hash(arr) {
+  const ret = {}, len = arr.length;
+  for(let i = 0; i < len; i++) {
+    ret[arr[i]] = true;
+  }
+  return ret;
+}
+
+export function warn(val) {
+  console.warn(val);
+}
+
+export function log() {
+  console.log.apply(null, arguments);
 }
