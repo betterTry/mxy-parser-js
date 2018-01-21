@@ -23,10 +23,10 @@ module.exports = {
     // allow debugger during development
     'no-debugger': process.env.NODE_ENV === 'production' ? 2 : 0,
     "no-console":  process.env.NODE_ENV === 'production' ? 2 : 0,
-    'camelcase': 1,
+    'camelcase': 0,
     'no-fallthrough': 0,
     'semi': ['error', 'always'],
-    'quotes': ['error', 'single', {"allowTemplateLiterals": true}],
+    'quotes': ['error', 'single', { "allowTemplateLiterals": true, "avoidEscape": true }],
     'no-extra-semi': ['error'],
     'indent': ['error', 2, {'SwitchCase': 1}],
     'linebreak-style': ['error', 'unix'],

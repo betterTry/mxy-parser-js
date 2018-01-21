@@ -1,4 +1,4 @@
-import {KEY_WORDS, RESERVED_WORDS, KEY_WORDS_BEFORE_EXPRESSION, KEYWORDS_ATOM, OPERATOR_CHARS, RE_HEX_NUMBER, RE_OCT_NUMBER, RE_DEC_NUMBER, OPERATORS, WHITESPACE_CHARS, PUNC_BEFORE_EXPRESSION, PUNC_CHARS, REGEXP_MODIFIERS, UNICODE} from '../constant';
+import {RE_HEX_NUMBER, RE_OCT_NUMBER, RE_DEC_NUMBER, UNICODE} from '../constant';
 
 
 export function characters(string) {
@@ -14,7 +14,7 @@ export function hit_obj(obj, prop) {
 }
 
 export function is_digit(ch) {
-  ch = ch.charCodeAt(0)
+  ch = ch.charCodeAt(0);
   return ch >= 48 && ch <= 57;
 }
 
@@ -28,10 +28,6 @@ export function is_alphanumeric_char(ch) {
 
 export function is_identifier_start(ch) {
   return ch == '_' || ch == '$' || is_letter(ch);
-}
-
-export function is_valid_name_char() {
-  return is_identifier_start(ch) || is_digit(ch);
 }
 
 export function is_identifier_char(ch) {
