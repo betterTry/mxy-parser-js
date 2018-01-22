@@ -1,3 +1,4 @@
-import * as parse from './parse';
+import tokenizer from './tokenizer';
+import parse from './parse';
 
-export default {parse};
+export default {tokenizer, parse};

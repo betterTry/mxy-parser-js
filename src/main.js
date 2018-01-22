@@ -1,11 +1,10 @@
-import mxy from './lib/parse';
-console.log(mxy);
-const result = new mxy.tokenizer('var a = 1');
-console.log(result.next_token());
-console.log(result.next_token());
-console.log(result.next_token());
-console.log(result.next_token());
-console.log(result.next_token());
+import mxy from './lib';
+
+// const result = new mxy.tokenizer('var a = 1');
+// console.log(result.next_token());
+const result = new mxy.parse('var a = 1');
+console.log(result);
+
 
 !function (name, defination) {
   const hasDefine = typeof window.define == 'function';
