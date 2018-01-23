@@ -116,7 +116,7 @@ class tokenizer {
   }
 
   read_string() {
-    return this.with_eof_error('Unterminatedthis.String constant', () => {
+    return this.with_eof_error('Unterminated String constant', () => {
       const quoto = this.next();
       let ret = '';
       for (;;) {
@@ -362,4 +362,16 @@ class js_error {
 }
 
 
+/**
+ * @enum {string }
+ * @enum {num }
+ * @enum {comment1 }
+ * @enum {comment2 }
+ * @enum {regexp }
+ * @enum {name }
+ * @enum {atom }
+ * @enum {keyword }
+ * @enum {punc }
+ * @enum {eof }
+ **/
 export default tokenizer;

@@ -39,6 +39,10 @@ export function is_identifier_char(ch) {
       || ch == '\u200d'; // zero-width joiner <ZWJ> (in my ECMA-262 PDF, this is also 200c)
 }
 
+export function is_assignable() {
+  
+}
+
 export function parse_js_number(num) {
   if (hit_reg(RE_HEX_NUMBER, num)) { // 16进制;
     return parseInt(num.substr(2), 16);
