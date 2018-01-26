@@ -1,9 +1,9 @@
 import mxy from './lib';
 
-// const result = new mxy.tokenizer('var a = 1');
-// console.log(result.next_token());
-const result = new mxy.parse('var a = 1');
-console.log(result);
+const result = new mxy.tokenizer('var a = 1');
+console.log(result.next_token());
+// const result = new mxy.parse('var a = 1');
+// console.log(result);
 
 
 !function (name, defination) {

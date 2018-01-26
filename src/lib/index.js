@@ -1,4 +1,4 @@
 import tokenizer from './tokenizer';
-import parse from './parse';
+// import parse from './parse';
 
-export default {tokenizer, parse};
+export default {tokenizer};
