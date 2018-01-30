@@ -1,4 +1,4 @@
-import {hit_obj, is_digit, is_alphanumeric_char, parse_js_number, warn, is_identifier_char, is_identifier_start} from '../utils';
+import {hit_obj, is_digit, warn, parse_js_number, is_identifier_char, is_identifier_start} from '../utils';
 import {KEY_WORDS, PUNC_CHARS, KEY_WORDS_BEFORE_EXPRESSION, KEYWORDS_ATOM, OPERATOR_CHARS, OPERATORS, UNARY_POSTFIX, WHITESPACE_CHARS, PUNC_BEFORE_EXPRESSION} from '../constant';
 
 
@@ -104,14 +104,14 @@ class tokenizer {
         }
         return false;
       }
-      return is_alphanumeric_char(ch);
+      return is_digit(ch);
     });
     if (prefix) num = prefix + num;
     const valid = parse_js_number(num);
     if (!isNaN(valid)) {
       return this.token('num', valid);
     } else {
-      this.throw_error(`Invalidthis.Syntax: ${num}`);
+      this.throw_error(`Invalid this.Syntax: ${num}`);
     }
   }
 

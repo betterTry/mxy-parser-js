@@ -1,6 +1,11 @@
 import mxy from './lib';
 
-const result = new mxy.tokenizer('var a = 1');
+const result = new mxy.tokenizer('1 .a');
+console.log(result.next_token());
+console.log(result.next_token());
+console.log(result.next_token());
+console.log(result.next_token());
+console.log(result.next_token());
 console.log(result.next_token());
 // const result = new mxy.parse('var a = 1');
 // console.log(result);

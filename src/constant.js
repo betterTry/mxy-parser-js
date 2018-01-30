@@ -1,6 +1,6 @@
 import {characters, array_to_hash} from './utils';
 
-//https://www.ecma-international.org/ecma-262/5.1/#sec-7.6.1.1
+// https://www.ecma-international.org/ecma-262/5.1/#sec-7.6.1.1
 export const KEY_WORDS = array_to_hash([
   'break',
   'continue',
