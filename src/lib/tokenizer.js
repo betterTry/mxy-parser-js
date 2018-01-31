@@ -5,7 +5,8 @@ import {KEY_WORDS, PUNC_CHARS, KEY_WORDS_BEFORE_EXPRESSION, KEYWORDS_ATOM, OPERA
 class tokenizer {
   constructor($TEXT) {
     this.S = {
-      text: $TEXT.replace(/\r\n?|[\n\u2028\u2029]/g, '\n').replace(/^\ufefe/, ''),
+      text: $TEXT.replace(/\r\n?|[\n\u2028\u2029\u000A]/g, '\n').replace(/^\ufefe/, ''),
+      // https://www.ecma-international.org/ecma-262/5.1/#sec-7.3
       pos: 0,
       tokpos: 0,
       col: 0,
@@ -34,13 +35,13 @@ class tokenizer {
       col: this.S.tokcol,
       pos: this.S.tokpos,
       endpos: this.S.pos,
-      nlb: this.S.newline_before,
+      line_before: this.S.newline_before,
     };
     if (!is_comment) {
       ret.comments_before = this.S.comments_before;
       this.S.comments_before = [];
       for (let i = 0, len = ret.comments_before.length; i < len; i++) {
-        ret.nlb = ret.nlb || ret.comments_before[i].nlb;
+        ret.line_before = ret.line_before || ret.comments_before[i].line_before;
       }
     }
     this.S.newline_before = false;
@@ -230,6 +231,8 @@ class tokenizer {
           ret = '\\' + ch;
         } else if (ch == '/' && !in_class) {
           break;
+        } else if (ch == '\n') {
+          throw this.EX_EOF;
         } else {
           ret += 'ch';
         }
@@ -363,15 +366,15 @@ class js_error {
 
 
 /**
- * @enum {string }
- * @enum {num }
- * @enum {comment1 }
- * @enum {comment2 }
- * @enum {regexp }
- * @enum {name }
- * @enum {atom }
- * @enum {keyword }
- * @enum {punc }
- * @enum {eof }
+ * @enum { string }
+ * @enum { num }
+ * @enum { comment1 }
+ * @enum { comment2 }
+ * @enum { regexp }
+ * @enum { name }
+ * @enum { atom }
+ * @enum { keyword }
+ * @enum { punc }
+ * @enum { eof }
  **/
 export default tokenizer;

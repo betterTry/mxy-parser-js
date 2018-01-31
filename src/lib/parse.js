@@ -40,9 +40,14 @@ class parse {
   as() {
     return slice(arguments);
   }
+  // https://www.ecma-international.org/ecma-262/5.1/#sec-7.9
+  can_insert_semicolon() {
+    return this.S.token.line_before || is('eof') || is('punc', '}');
+  }
 
   semicolon() {
     if (this.is('punc', ';')) next();
+    else if (this.can_insert_semicolon()) throw_error();
   }
 
 
@@ -96,13 +101,15 @@ class parse {
    * @see https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Statements
    */
   statements() {
+    if (is('operator', '/') || is('operator', '/=')) {
+      return this.tokenizer.read_regexp();
+    }
     switch(this.current.type) {
       case 'string':
         const stat = this.simple_statement()
         if (this.S.in_directive && this.current)
         return
       case 'keyword':
-        if ()
     }
   }
 
