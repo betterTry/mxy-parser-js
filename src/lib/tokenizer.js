@@ -1,5 +1,23 @@
-import {hit_obj, is_digit, warn, parse_js_number, is_identifier_char, is_identifier_start} from '../utils';
-import {KEY_WORDS, PUNC_CHARS, KEY_WORDS_BEFORE_EXPRESSION, KEYWORDS_ATOM, OPERATOR_CHARS, OPERATORS, UNARY_POSTFIX, WHITESPACE_CHARS, PUNC_BEFORE_EXPRESSION} from '../constant';
+import {
+  warn,
+  hit_obj,
+  parse_js_number,
+  is_digit,
+  is_regexp_pattern,
+  is_identifier_char,
+  is_identifier_start,
+} from '../utils';
+import {
+  PUNC_CHARS,
+  KEY_WORDS,
+  KEYWORDS_ATOM,
+  KEY_WORDS_BEFORE_EXPRESSION,
+  OPERATOR_CHARS,
+  OPERATORS,
+  UNARY_POSTFIX,
+  WHITESPACE_CHARS,
+  PUNC_BEFORE_EXPRESSION,
+} from '../constant';
 
 
 class tokenizer {
@@ -11,10 +29,10 @@ class tokenizer {
       tokpos: 0,
       col: 0,
       tokcol: 0,
-      line: 0,
-      tokline: 0,
+      line: 1,
+      tokline: 1,
       newline_before: false,
-      regex_allowed: false,
+      regex_allowed: true,
       comments_before: [],
     };
     this.EX_EOF = {};
@@ -214,9 +232,8 @@ class tokenizer {
   }
 
   read_regexp() {
-    this.next();
     let ch, ret = '';
-    return this.with_eof_error('Unterminated regular expression', () => {
+    return this.with_eof_error('Uncaught SyntaxError: Invalid regular expression ', () => {
       while((ch = this.next(true))) {
         let in_class = false, pre_backslash = false;
         if (ch == '\\') {
@@ -229,15 +246,18 @@ class tokenizer {
           ret += ch;
         } else if (pre_backslash) {
           ret = '\\' + ch;
-        } else if (ch == '/' && !in_class) {
-          break;
+        } else if (ch == '/') {
+          if (!in_class) break;
+          else throw {extra: ': missing /'};
         } else if (ch == '\n') {
           throw this.EX_EOF;
         } else {
-          ret += 'ch';
+          ret += ch;
         }
       }
+      if (ch != '/') throw {extra: ': missing /'};
       const mods = this.read_name();
+      if (mods && !is_regexp_pattern(mods)) throw {extra: 'flags'};
       return this.token('regexp', [ret, mods]);
     });
   }
@@ -270,10 +290,11 @@ class tokenizer {
     return name;
   }
 
-  read_operator() {
-    let ch, ret = this.next();
-    while ((ch = this.next()) && hit_obj(OPERATORS, ret + ch)) {
+  read_operator(prefix) {
+    let ch, ret = prefix || this.next();
+    while ((ch = this.peek()) && hit_obj(OPERATORS, ret + ch)) {
       ret += ch;
+      this.next();
     }
     return this.token('operator', ret);
   }
@@ -300,8 +321,8 @@ class tokenizer {
     try {
       ret = pred();
     } catch(err) {
-      if (err == this.EX_EOF) {
-        this.throw_error(message);
+      if (err == this.EX_EOF || err.extra) {
+        this.throw_error(message + (err.extra || ''));
       } else {
         throw err;
       }
@@ -327,7 +348,7 @@ class tokenizer {
       this.S.regex_allowed = regex_allowed;
       return this.next_token();
     }
-    return this.S.regex_allowed ? this.read_regexp() : this.read_operator();
+    return this.S.regex_allowed ? this.read_regexp() : this.read_operator('/');
   }
 
   next_token() {
@@ -351,7 +372,7 @@ class tokenizer {
 }
 
 class js_error {
-  construtor(message, line, col, pos) {
+  constructor(message, line, col, pos) {
     this.message = message;
     this.line = line;
     this.col = col;

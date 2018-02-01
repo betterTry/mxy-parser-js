@@ -1,4 +1,4 @@
-import {RE_HEX_NUMBER, RE_OCT_NUMBER, RE_DEC_NUMBER, UNICODE} from '../constant';
+import {RE_HEX_NUMBER, RE_OCT_NUMBER, RE_DEC_NUMBER, UNICODE, REGEXP_PARTTERN} from '../constant';
 
 
 export function characters(string) {
@@ -39,8 +39,17 @@ export function is_identifier_char(ch) {
       || ch == '\u200d'; // zero-width joiner <ZWJ> (in my ECMA-262 PDF, this is also 200c)
 }
 
-export function is_assignable() {
-  
+// export function is_assignable(expr) {
+//
+// }
+
+export function is_regexp_pattern(str) {
+  for (let i = 0; i < str.length; i++) {
+    if (!hit_reg(REGEXP_PARTTERN, str[i]) || str.slice(0, i).indexOf(str[i]) > -1) {
+      return false;
+    }
+  }
+  return true;
 }
 
 export function parse_js_number(num) {

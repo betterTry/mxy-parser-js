@@ -81,12 +81,20 @@ class parse {
 
   maybe_conditional() {
     const expr = this.expr_ops();
+    if (this.is('operator', '?')) {
+      
+    }
+    return expr;
   }
 
-  maybe_assign() {
+  maybe_assign(commas) {
     let left = this.maybe_conditional();
-    if ()
+    if (commas && this.is('punc', ',')) {
+      return as('seq', left, this.expression())
+    }
+    return
   }
+
   expression() {
     const left = this.maybe_assign();
 
@@ -96,17 +104,17 @@ class parse {
     return as('stat', expression());
   }
 
-
   /**
    * @see https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Statements
    */
   statements() {
-    if (is('operator', '/') || is('operator', '/=')) {
-      return this.tokenizer.read_regexp();
-    }
+    // DivPunctuator
+    // if (is('operator', '/') || is('operator', '/=')) {
+    //   return this.tokenizer.read_regexp();
+    // }
     switch(this.current.type) {
       case 'string':
-        const stat = this.simple_statement()
+        const stat = this.simple_statement();
         if (this.S.in_directive && this.current)
         return
       case 'keyword':

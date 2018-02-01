@@ -1,6 +1,10 @@
 import mxy from './lib';
 
-const result = new mxy.tokenizer('1 .a');
+const result = new mxy.tokenizer('var a = 1;!/asd\n/g function() {var c=  1}');
+console.log(result.next_token());
+console.log(result.next_token());
+console.log(result.next_token());
+console.log(result.next_token());
 console.log(result.next_token());
 console.log(result.next_token());
 console.log(result.next_token());

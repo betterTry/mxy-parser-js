@@ -72,6 +72,7 @@ export const KEY_WORDS_BEFORE_EXPRESSION = array_to_hash([
   'case',
 ]);
 
+// cannot be assigned;
 export const KEYWORDS_ATOM = array_to_hash([
   'false',
   'null',
@@ -135,7 +136,7 @@ export const WHITESPACE_CHARS = array_to_hash(characters(' \u00a0\n\r\t\f\u000b\
 
 export const PUNC_BEFORE_EXPRESSION = array_to_hash(characters('[{(,.;:'));
 export const PUNC_CHARS = array_to_hash(characters('[]{}(),;:'));
-export const REGEXP_MODIFIERS = array_to_hash(characters('gimuy'));
+export const REGEXP_PARTTERN = /[gimuys]/;
 
 /**
  * @see https://www.ecma-international.org/ecma-262/5.1/#sec-11.4
