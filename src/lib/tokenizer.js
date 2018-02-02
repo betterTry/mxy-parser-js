@@ -18,6 +18,7 @@ import {
   WHITESPACE_CHARS,
   PUNC_BEFORE_EXPRESSION,
 } from '../constant';
+import js_error from './js_error';
 
 
 class tokenizer {
@@ -301,13 +302,13 @@ class tokenizer {
 
   read_word() {
     const word = this.read_name();
-    return !hit_obj(KEY_WORDS, word)
-      ? this.token('name', word)
+    return hit_obj(KEY_WORDS, word)
+      ? this.token('keyword')
       : hit_obj(OPERATORS, word)
         ? this.token('operator', word)
         : hit_obj(KEYWORDS_ATOM, word)
           ? this.token('atom', word)
-          : this.token('keyword', word);
+          : this.token('name', word);
   }
 
   find(target, must) {
@@ -368,20 +369,6 @@ class tokenizer {
 
   throw_error(err) {
     throw new js_error(err, this.S.line, this.S.col, this.S.pos);
-  }
-}
-
-class js_error {
-  constructor(message, line, col, pos) {
-    this.message = message;
-    this.line = line;
-    this.col = col;
-    this.pos = pos;
-    this.stack = new Error().stack;
-  }
-
-  toString() {
-    return `${this.message} (line: ${this.line}, col: ${this.col}, pos: ${this.pos})\n\n${this.stack}`;
   }
 }
 

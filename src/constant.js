@@ -72,6 +72,12 @@ export const KEY_WORDS_BEFORE_EXPRESSION = array_to_hash([
   'case',
 ]);
 
+export const INDENTIFIER = array_to_hash([
+  'var',
+  'let',
+  'const',
+]);
+
 // cannot be assigned;
 export const KEYWORDS_ATOM = array_to_hash([
   'false',

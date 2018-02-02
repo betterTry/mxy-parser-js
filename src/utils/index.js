@@ -70,6 +70,23 @@ export function array_to_hash(arr) {
   return ret;
 }
 
+export function member(arr, target) {
+  for (let i = 0, len = arr.length; i < len; i++) {
+    if (arr[i] === target) {
+      return true;
+    }
+  }
+  return false;
+}
+
+export function slice(arr) {
+  return Array.prototype.slice.call(arr);
+}
+
+export function as() {
+  return slice(arguments);
+}
+
 export function warn(val) {
   console.warn(val);
 }

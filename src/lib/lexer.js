@@ -1,5 +1,11 @@
-import {UNARY_PREFIX, UNARY_POSTFIX} from './constant'
+import {
+  INDENTIFIER,
+  UNARY_PREFIX,
+  UNARY_POSTFIX,
+} from './constant'
 import tokenizer from './tokenizer';
+import js_error from './js_error';
+import {as, member} from '../utils';
 
 
 
@@ -11,6 +17,9 @@ class parse {
       prev: null,
       peeked: null,
       in_directive: true,
+      labels: [],
+      in_loop: false,
+      in_block: false,
     };
   }
 
@@ -37,9 +46,11 @@ class parse {
   is(type, value) {
     return this.S.token.type == type && (!value || value && value == this.S.token.value);
   }
-  as() {
-    return slice(arguments);
+
+  throw_error(message) {
+    throw new js_error(message, this.current.line, this.current.col, this.current.pos);
   }
+
   // https://www.ecma-international.org/ecma-262/5.1/#sec-7.9
   can_insert_semicolon() {
     return this.S.token.line_before || is('eof') || is('punc', '}');
@@ -47,15 +58,8 @@ class parse {
 
   semicolon() {
     if (this.is('punc', ';')) next();
-    else if (this.can_insert_semicolon()) throw_error();
+    else if (this.can_insert_semicolon()) this.throw_error();
   }
-
-
-
-  handle_string() {
-
-  }
-
   prog(ret) {
     if (ret instanceof Function) ret = ret();
     for (let i = 1; i < arguments.length; i++) {
@@ -63,6 +67,35 @@ class parse {
     }
     return ret;
   }
+
+  var_() {
+
+  }
+
+  for_() {
+    this.expect('(');
+    if (!is('punc', ',')) {
+      const init = this.expression();
+    }
+  }
+
+  break_continue(type) {
+    let name;
+    if (!this.can_insert_semicolon()) {
+      name = is('name') ? this.current.value : null;
+    }
+    if (name !== null) {
+      if (!member(this.S.labels, name)) {
+        throw_error('Uncaught SyntaxError: Undefined label "a"');
+      }
+    } else if (!this.S.in_loop || type == 'break' && !this.S.in_block) {
+      // break label can exist in block statement;
+      throw_error(`Uncaught SyntaxError: Illegal ${type} statement`);
+    }
+    return as(type, name);
+  }
+
+
 
   make_unary(tag, op, ) {
 
@@ -75,6 +108,17 @@ class parse {
     const val =
   }
 
+
+
+  expect_token(type, value) {
+    if (this.is(type, value)) return this.next();
+    throw_error(`Unexpected token: ${type} (${token})`);
+  }
+
+  expect(value) {
+    return this.expect_token('punc', value);
+  }
+
   expr_ops() {
     const unary = this.maybe_unary();
   }
@@ -82,7 +126,7 @@ class parse {
   maybe_conditional() {
     const expr = this.expr_ops();
     if (this.is('operator', '?')) {
-      
+      return
     }
     return expr;
   }
@@ -95,10 +139,13 @@ class parse {
     return
   }
 
-  expression() {
-    const left = this.maybe_assign();
 
+  // left-hand-site expression;
+  expression(commas) {
+    if (!arguments.length) commas = true;
+    const expr = this.maybe_assign();
   }
+
 
   simple_statement() {
     return as('stat', expression());
@@ -112,12 +159,16 @@ class parse {
     // if (is('operator', '/') || is('operator', '/=')) {
     //   return this.tokenizer.read_regexp();
     // }
-    switch(this.current.type) {
-      case 'string':
-        const stat = this.simple_statement();
-        if (this.S.in_directive && this.current)
-        return
+    const stat_type = this.current.type;
+    switch(stat_type) {
       case 'keyword':
+        switch(this.prog(this.current.type, this.next)) {
+          'break':
+          'continue':
+            return this.break_continue(stat_type);
+          'for':
+            return this.for_();
+        }
     }
   }
 
