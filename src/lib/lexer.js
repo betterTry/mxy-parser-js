@@ -69,14 +69,53 @@ class parse {
   }
 
   var_() {
+    const ret = [];
+    for (;;) {
+      const name = this.expect_token('name').value;
+      if (this.is('operator', '=')) {
+        ret.push([name, this.expression()]);
+      } else {
+        ret.push(name);
+      }
+      if (!is('punc', ',')) break;
+      this.next();
+    }
+    return as['var', ret];
+  }
 
+  in_loop(statment) {
+    try {
+      this.in_loop = true;
+      return this.statement();
+    } finally {
+      this.in_loop = false;
+    }
+  }
+
+  regular_for(init) {
+    this.expect(';');
+    const test = this.is('punc', ';') ? null : this.expression();
+    this.expect(';');
+    const end = this.is('punc', ';') ? null : this.expression();
+    this.expect(')');
+    return as('for', init, test, end, this.in_loop(this.statement);
   }
 
   for_() {
     this.expect('(');
-    if (!is('punc', ',')) {
-      const init = this.expression();
+    const ret = null;
+    if (!this.is('punc', ',')) {
+      ret = this.is('keyword', 'var')
+              ? (this.next(), this.var_())
+              : (this.expression());
+      if (this.is('operator', 'in')) {
+        if (ret[0] == 'var' && ret[1].length > 1) {
+          this.throw_error('Only one variable declaration allowed in for..in loop')''
+        }
+        return this.for_in(ret);
+      }
     }
+    return this.regular_for(ret);
   }
 
   break_continue(type) {
@@ -123,6 +162,10 @@ class parse {
     const unary = this.maybe_unary();
   }
 
+  maybe_atom() {
+
+  }
+
   maybe_conditional() {
     const expr = this.expr_ops();
     if (this.is('operator', '?')) {
@@ -144,6 +187,7 @@ class parse {
   expression(commas) {
     if (!arguments.length) commas = true;
     const expr = this.maybe_assign();
+
   }
 
 
