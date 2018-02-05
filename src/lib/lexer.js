@@ -238,8 +238,10 @@ class parse {
       return this.function_();
     }
     if (this.is_atom_token()) {
-      if ()
-      return as(this.current.type, this.current.value)
+      const atom = this.current.type == 'regexp'
+                    ? this.as('regexp', this.current.value[0], this.current.value[1])
+                    : this.as(this.current.type, this.current.value);
+      return this.subscript(this.prog1(atom, this.next));
     }
     this.throw_error(`Unexpected token ${this.current.value}`)
   }
