@@ -94,3 +94,26 @@ export function warn(val) {
 export function log() {
   console.log.apply(null, arguments);
 }
+
+export function precedence() {
+  // 赋值符; -2
+  // ?:操作符 -1
+  const ops = [
+    ['||'],
+    ['&&'],
+    ['|'],
+    ['^'],
+    ['&'],
+    ['==', '===', '!=', '!=='],
+    ['<', '>', '<=', '>=', 'in', 'instanceof'],
+    ['+', '-'],
+    ['*', '/', '%'],
+  ];
+  const ret = {};
+  for (let i = 0; i < ops.length; i++) {
+    for (let j = 0, t = ops[i]; j < t.length; j++) {
+      ret[t[j]] = i;
+    }
+  }
+  return ret;
+}
