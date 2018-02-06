@@ -1,6 +1,6 @@
 import mxy from './lib';
 
-const result = new mxy.tokenizer('var a= null;');
+const result = new mxy.tokenizer('for(;;){}');
 console.log(result.next_token());
 console.log(result.next_token());
 console.log(result.next_token());
@@ -11,8 +11,8 @@ console.log(result.next_token());
 console.log(result.next_token());
 console.log(result.next_token());
 console.log(result.next_token());
-// const result = new mxy.parse('var a = 1');
-// console.log(result);
+const res = new mxy.lexer('for(;;){}');
+console.log(res.result);
 
 
 !function (name, defination) {

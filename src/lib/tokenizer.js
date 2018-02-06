@@ -303,7 +303,7 @@ class tokenizer {
   read_word() {
     const word = this.read_name();
     return hit_obj(KEY_WORDS, word)
-      ? this.token('keyword')
+      ? this.token('keyword', word)
       : hit_obj(OPERATORS, word)
         ? this.token('operator', word)
         : hit_obj(KEYWORDS_ATOM, word)
