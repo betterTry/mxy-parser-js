@@ -19,6 +19,7 @@ export const KEY_WORDS = array_to_hash([
   'with',
   'switch',
   'if',
+  'else',
   'return',
   'try',
   'typeof',
@@ -84,6 +85,13 @@ export const KEYWORDS_ATOM = array_to_hash([
   'null',
   'true',
   'undefined',
+]);
+
+export const STATEMENTS_WITH_LABELS = array_to_hash([
+  'do',
+  'for',
+  'while',
+  'switch',
 ]);
 
 export const OPERATOR_CHARS = array_to_hash(characters('+-*&%=<>!?|~^'));

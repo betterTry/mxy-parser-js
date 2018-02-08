@@ -2,13 +2,14 @@ import {
   UNARY_PREFIX,
   UNARY_POSTFIX,
   ASSIGN_OPEATORS,
+  STATEMENTS_WITH_LABELS,
 } from '../constant';
 import tokenizer from './tokenizer';
 import js_error from './js_error';
 import {as, member, hit_obj, precedence} from '../utils';
 
 class lexer {
-  constructor($TEXT) {
+  constructor($TEXT, strict_mode) {
     this.tokenizer = typeof $TEXT == 'string' ? new tokenizer($TEXT) : $TEXT;
     this.S = {
       token: this.tokenizer.go,
@@ -18,6 +19,7 @@ class lexer {
       labels: [],
       in_loop: false,
       in_block: false,
+      strict_mode: strict_mode,
     };
   }
 
@@ -26,7 +28,6 @@ class lexer {
   }
 
   next() {
-    console.log(this);
     this.S.prev = this.S.token;
     if (this.S.peeked) {
       this.S.token = this.S.peeked;
@@ -42,8 +43,12 @@ class lexer {
     return this.S.peeked || (this.S.peeked = this.tokenizer.go);
   }
 
+  is_token(token, type, value) {
+    return token.type == type && (!value || token.value == value);
+  }
+
   is(type, value) {
-    return this.S.token.type == type && (!value || value && value == this.S.token.value);
+    return this.is_token(this.current, type, value);
   }
 
   throw_error(message) {
@@ -56,7 +61,7 @@ class lexer {
   }
 
   is_atom_token() {
-    return /^(?:name|atom|num|string|regexp)$/.test(this.current.token);
+    return /^(?:name|atom|num|string|regexp)$/.test(this.current.type);
   }
 
   semicolon() {
@@ -72,12 +77,16 @@ class lexer {
   }
 
   expect_token(type, value) {
-    if (this.is(type, value)) return this.next();
-    this.throw_error(`Unexpected token: ${type} (${this.current.token})`);
+    if (this.is(type, value)) return this.prog(this.current, this.next);
+    this.throw_error(`Unexpected token: ${type} (${this.current})`);
   }
 
   expect(value) {
     return this.expect_token('punc', value);
+  }
+
+  unexpected(token) {
+    this.throw_error(`Unexpected token: ${token && token.type || this.current.type} (${token || this.current})`);
   }
 
   var_() {
@@ -85,6 +94,7 @@ class lexer {
     for (;;) {
       const name = this.expect_token('name').value;
       if (this.is('operator', '=')) {
+        this.next();
         ret.push([name, this.expression()]);
       } else {
         ret.push(name);
@@ -92,13 +102,13 @@ class lexer {
       if (!this.is('punc', ',')) break;
       this.next();
     }
-    return as['var', ret];
+    return as('var', ret);
   }
 
   in_loop(expr) {
     try {
       this.in_loop = true;
-      return expr();
+      return expr.bind(this)();
     } finally {
       this.in_loop = false;
     }
@@ -108,7 +118,7 @@ class lexer {
     this.expect(';');
     const test = this.is('punc', ';') ? null : this.expression();
     this.expect(';');
-    const end = this.is('punc', ';') ? null : this.expression();
+    const end = this.is('punc', ')') ? null : this.expression();
     this.expect(')');
     return as('for', init, test, end, this.in_loop(this.statement));
   }
@@ -116,7 +126,7 @@ class lexer {
   for_() {
     this.expect('(');
     let ret = null;
-    if (!this.is('punc', ',')) {
+    if (!this.is('punc', ';')) {
       ret = this.is('keyword', 'var')
         ? (this.next(), this.var_())
         : (this.expression());
@@ -149,7 +159,6 @@ class lexer {
   new_() {
 
   }
-
 
   property_name() {
     switch(this.current.type) {
@@ -209,27 +218,57 @@ class lexer {
     return expr;
   }
 
+
+  label_(label) {
+    this.S.label.push(label);
+    const cache = this.current;
+    const stat = this.statement();
+    if (this.S.strict_mode && !hit_obj(STATEMENTS_WITH_LABELS, stat[0]))
+      this.unexpected(cache);
+    this.S.pop();
+    return as('label', label, stat);
+
+  }
+
   block_() {
+    this.next();
     const ret = [];
     while(!this.is('punc', '}')) {
       ret.push(this.statement());
     }
-    return as('block', ret);
+    return this.prog(as('block', ret), this.next);
   }
 
   braces_() {
     const ret = this.block_();
     if (ret[1].length) {
-      ret[1].forEach((item) => {
-        if (item).
-      })
+      const item = ret[1];
+      for (let i = 0, len = item.length; i < len; i++) {
+        if (item && item[0] !== 'label') {
+          return ret;
+        }
+      }
+      return as('object', ret[1]);
+    } else {
+      return ret;
     }
+  }
+
+  if_() {
+    this.expect('(');
+    const cond = this.parentheses_();
+    const body = this.statement();
+    let ebody;
+    if (this.is('keyword', 'else')) {
+      ebody = this.statement();
+    }
+    return as('if', cond, body, ebody);
   }
 
   parentheses_() {
     const expr = this.expression();
     this.expect(')');
-    return as['parentheses', expr];
+    return as('parentheses', expr);
   }
 
   expr_simple_expr() {
@@ -273,22 +312,24 @@ class lexer {
       return this.make_unary('unary-prefix', this.prog(this.current.value, this.next), this.maybe_unary());
     }
     let val = this.expr_simple_expr();
-    while (this.is('operator') && hit_obj(UNARY_POSTFIX, this.current.value) && !this.current.token.nlb) {
+    while (this.is('operator') && hit_obj(UNARY_POSTFIX, this.current.value) && !this.current.nlb) {
       val = this.make_unary('unary_postfix', this.current.value, val);
       this.next();
     }
     return val;
   }
 
-  expr_ops() {
+  expr_ops(left) {
     // 应该先看一元操作符;
-    const left = this.maybe_unary();
+    left = left || this.maybe_unary();
     let op = this.is('operator') ? this.current.value : null;
     if (op !== null) {
       op = precedence(op);
+      this.next();
       // 此处不需要从maybe_assign处来算, 是因为优先级的问题;
       var right = this.maybe_unary();
-      return this.expr_ops(as('binary', op, left, right));
+      console.log(right);
+      return this.expr_ops(as('binary', op, left, right)); // 连等;
     }
     return left;
   }
@@ -320,6 +361,7 @@ class lexer {
 
   maybe_assign(commas) {
     let left = this.maybe_conditional();
+    console.log(left);
     if (this.is('operator') || hit_obj(ASSIGN_OPEATORS, this.current.value)) {
       if (this.is_assignable(left)) {
         this.next();
@@ -327,10 +369,6 @@ class lexer {
       }
     }
     return left;
-  }
-
-  is_valid_simple_assignment_target() {
-
   }
 
   // left-hand-site expression;
@@ -344,7 +382,6 @@ class lexer {
     return expr;
   }
 
-
   simple_statement() {
     return as('stat', this.expression());
   }
@@ -352,7 +389,7 @@ class lexer {
   /**
    * @see https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Statements
    */
-  statements() {
+  statement() {
     // DivPunctuator
     // if (is('operator', '/') || is('operator', '/=')) {
     //   return this.tokenizer.read_regexp();
@@ -364,22 +401,36 @@ class lexer {
           case '{':
             return this.braces_();
           case '[':
+            return this.array_();
+          case '(':
+            return this.parentheses_();
+          case ';':
+            this.next();
+            return as('block');
+          default:
+            this.unexpected();
         }
       case 'keyword':
-        switch(this.prog(this.current.type, this.next)) {
+        switch(this.prog(this.current.value, this.next)) {
           case 'break':
           case 'continue':
             return this.break_continue(stat_type);
           case 'for':
             return this.for_();
+          case 'var':
+            return this.var_();
+          case 'if':
+            return this.if_();
         }
+      case 'name':
+        return this.is_token(this.peek(), 'punc', ':') ? this.label_() : this.simple_statement();
     }
   }
 
   top_loop() {
     const ret = [];
     while(!this.is('eof')) {
-      ret.push(this.statements());
+      ret.push(this.statement());
     }
     return ret;
   }

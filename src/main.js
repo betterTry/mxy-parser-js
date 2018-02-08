@@ -1,17 +1,10 @@
 import mxy from './lib';
 
-const result = new mxy.tokenizer('for(;;){}');
-console.log(result.next_token());
-console.log(result.next_token());
-console.log(result.next_token());
-console.log(result.next_token());
-console.log(result.next_token());
-console.log(result.next_token());
-console.log(result.next_token());
-console.log(result.next_token());
-console.log(result.next_token());
-console.log(result.next_token());
-const res = new mxy.lexer('for(;;){}');
+const result = new mxy.tokenizer('var a = 1;for(;;){};if(a) {a = 3}');
+for (let i = 0; i < 25; i++) {
+  console.log(result.next_token());
+}
+const res = new mxy.lexer('var a = 1;for(;;){};if(a) {a = 3}');
 console.log(res.result);
 
 
