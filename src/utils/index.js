@@ -95,7 +95,8 @@ export function log() {
   console.log.apply(null, arguments);
 }
 
-export function precedence() {
+
+export const precedence = !function () {
   // 赋值符; -2
   // ?:操作符 -1
   const ops = [
@@ -116,4 +117,4 @@ export function precedence() {
     }
   }
   return ret;
-}
+}();

@@ -78,7 +78,7 @@ class lexer {
 
   expect_token(type, value) {
     if (this.is(type, value)) return this.prog(this.current, this.next);
-    this.throw_error(`Unexpected token: ${type} (${this.current})`);
+    this.throw_error(`Unexpected token: ${type} (${this.current.value})`);
   }
 
   expect(value) {
@@ -86,7 +86,7 @@ class lexer {
   }
 
   unexpected(token) {
-    this.throw_error(`Unexpected token: ${token && token.type || this.current.type} (${token || this.current})`);
+    this.throw_error(`Unexpected token: ${token && token.type || this.current.type} (${token && token.value || this.current.value})`);
   }
 
   var_() {
@@ -254,6 +254,14 @@ class lexer {
     }
   }
 
+  do_() {
+    const body = this.statement();
+    this.expect_token('keyword', 'while');
+    this.expect('(');
+    const cond = this.parentheses_();
+    return as('do', body[1], cond[1]);
+  }
+
   if_() {
     this.expect('(');
     const cond = this.parentheses_();
@@ -262,11 +270,11 @@ class lexer {
     if (this.is('keyword', 'else')) {
       ebody = this.statement();
     }
-    return as('if', cond, body, ebody);
+    return as('if', cond[1], body, ebody);
   }
 
   parentheses_() {
-    const expr = this.expression();
+    const expr = this.is('punc', ')') ? [] : this.expression();
     this.expect(')');
     return as('parentheses', expr);
   }
@@ -324,11 +332,10 @@ class lexer {
     left = left || this.maybe_unary();
     let op = this.is('operator') ? this.current.value : null;
     if (op !== null) {
-      op = precedence(op);
+      precedence[op];
       this.next();
       // 此处不需要从maybe_assign处来算, 是因为优先级的问题;
       var right = this.maybe_unary();
-      console.log(right);
       return this.expr_ops(as('binary', op, left, right)); // 连等;
     }
     return left;
@@ -361,7 +368,6 @@ class lexer {
 
   maybe_assign(commas) {
     let left = this.maybe_conditional();
-    console.log(left);
     if (this.is('operator') || hit_obj(ASSIGN_OPEATORS, this.current.value)) {
       if (this.is_assignable(left)) {
         this.next();
@@ -421,6 +427,8 @@ class lexer {
             return this.var_();
           case 'if':
             return this.if_();
+          case 'do':
+            return this.do_();
         }
       case 'name':
         return this.is_token(this.peek(), 'punc', ':') ? this.label_() : this.simple_statement();

@@ -1,0 +1,403 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "//**.**.**.**/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+<html xmlns="//**.**.**.**/1999/xhtml">
+
+<head>
+
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+
+<title>TPLINK_Auth_Key_计算器 作者：青岛小哥 email:qdpp007@**.**.**.**</title>
+
+<script type="text/javascript">
+
+function $(id)
+
+{
+
+        return document.getElementById(id);
+
+}
+
+function orgAuthPwd (pwd)
+
+        {
+
+                var strDe = "RDpbLfCPsJZ7fiv"; /*字符宽度15*/
+
+                var dic = "yLwVl0zKqws7LgKPRQ84Mdt708T1qQ3Ha7xv3H7NyU84p21BriUWBU43odz3iP4rBL3cD02KZciX"+
+
+                                  "TysVXiV8ngg6vL48rPJyAUw0HurW20xqxv9aYb4M9wK1Ae0wlro510qXeU07kV57fQMc8L6aLgML"+
+
+                                  "wygtc0F10a0Dg70TOoouyFhdysuRMO51yY5ZlOZZLEal1h0t9YQW0Ko7oBwmCAHoic4HYbUyVeU3"+
+
+                                  "sfQ1xtXcPcf1aT303wAQhv66qzW"; /*字符宽度255*/
+
+                $('dspDic').value=dic;
+
+                $('dspPwd').value=pwd;
+
+                $('dspStrDe').value=strDe;
+
+                return securityEncode(pwd, strDe, dic);
+
+        }
+
+function securityEncode (input1, input2, input3)
+
+        {
+
+                var dictionary = input3; /*=255*/
+
+                var output = "";
+
+                var len, len1, len2, lenDict;
+
+                var cl = 0xBB, cr = 0xBB;
+
+
+
+                len1 = input1.length; /*len1=6~15*/
+
+                len2 = input2.length; /*len2=15*/
+
+                lenDict = dictionary.length; /*lenDict=255*/
+
+                len = len1 > len2 ? len1 : len2; /*密码限定宽度最大15位，len恒等于15*/
+
+
+
+                for (var index = 0; index < len; index++) /*index= 0 to 14*/
+
+                {
+
+                        cl = 0xBB;
+
+                        cr = 0xBB;
+
+
+
+                        if (index >= len1) /*如果密码位数=14执行1次，=15不执行，=13执行2次，=12 3，11 4，10 5，9 6...保证取所有密码字符unicode*/
+
+                        {
+
+                                cr = input2.charCodeAt(index);
+
+                        }
+
+                        else if (index >= len2) /*14>=15,永远不执行！*/
+
+                        {
+
+                                cl = input1.charCodeAt(index);
+
+                        }
+
+                        else
+
+                        {
+
+                                cl = input1.charCodeAt(index); /*取所有密码字符unicode，超出部分取0xBB，补足15位*/
+
+                                cr = input2.charCodeAt(index); /*cr恒等于：82,68,112,98,76,102,67,80,115,74,90,55,102,105,118*/
+
+                        }
+
+                        output += dictionary.charAt((cl ^ cr)%lenDict); /*cl取所有密码字符unicode与cr异或mod 255*/
+
+                }
+
+
+
+                return output;
+
+        }
+
+function lgDoSub()
+
+                {
+
+                        var lgPwd = $('pwd').value;
+
+                        var result;
+
+                        var strAsc='';
+
+                        result = orgAuthPwd(lgPwd);
+
+                        for (var ix = 32 ;ix < 127;ix++) /*32~126可见字符*/
+
+                        {
+
+                                strAsc += String.fromCharCode(ix);
+
+                        }
+
+                        $('dspAsc').value=strAsc;
+
+                        $('dspAuthKey').value=result;
+
+                        $('dspLen').value=result.length;
+
+                }
+
+function AuthKeyCup()
+
+        {
+
+                        var arrayPasswd = new Array(15);
+
+                        var passwdLen=0;
+
+                        var authkey = $('authKey').value;
+
+                        var strDe = "RDpbLfCPsJZ7fiv";
+
+                        var dic = "yLwVl0zKqws7LgKPRQ84Mdt708T1qQ3Ha7xv3H7NyU84p21BriUWBU43odz3iP4rBL3cD02KZciX"+
+
+                                      "TysVXiV8ngg6vL48rPJyAUw0HurW20xqxv9aYb4M9wK1Ae0wlro510qXeU07kV57fQMc8L6aLgML"+
+
+                                      "wygtc0F10a0Dg70TOoouyFhdysuRMO51yY5ZlOZZLEal1h0t9YQW0Ko7oBwmCAHoic4HYbUyVeU3"+
+
+                                      "sfQ1xtXcPcf1aT303wAQhv66qzW"; /*字符宽度255*/
+
+                        var passwd='';
+
+                        for(var crIndex=0,passwdList,strComp_authkey,codeCr;crIndex<15;crIndex++)
+
+                        {
+
+                                passwdList='';
+
+                                strComp_authkey=authkey.charAt(crIndex);
+
+                                codeCr=strDe.charCodeAt(crIndex); /*cr恒等于：82,68,112,98,76,102,67,80,115,74,90,55,102,105,118*/
+
+                                for(var index=32,strtmp,codeCl,strDic;index<127;index++)
+
+                                {
+
+                                        strtmp = String.fromCharCode(index);
+
+                                        codeCl = strtmp.charCodeAt(0);
+
+                                        strDic = dic.charAt((codeCl ^ codeCr)%255);
+
+                                        if (strComp_authkey==strDic)
+
+                                        {
+
+                                                passwdList += strtmp;
+
+                                                continue;
+
+                                        }
+
+                                }
+
+                                arrayPasswd[crIndex]=passwdList;
+
+                        }
+
+                        for(var i=0;i<15;i++)
+
+                        {
+
+                                if(arrayPasswd.length==0)
+
+                                {
+
+                                        passwdLen=i;
+
+                                        break; /*密码长度=i,密码长度=0退出外循环*/
+
+                                }
+
+                                else if (i==14)
+
+                                {
+
+                                        passwdLen=15;
+
+                                }
+
+                        }
+
+                        for(var i=0;i<passwdLen;i++)
+
+                        {
+
+                                passwd+=arrayPasswd+'\r\n';
+
+                        }
+
+                        $('dspPasswd').value=passwd;
+
+                        console.log(passwd);
+                        passwd='';
+
+                        console.log(arrayPasswd);
+                        var ss = '';
+                        arrayPasswd.forEach(function(item){
+                          ss += item.slice(0, 1);
+                        })
+                        console.log(ss);
+                        console.log(passwdLen);
+                        for(var i=0;i<passwdLen;i++)
+
+                        {
+
+                                passwd+="drop table t"+i+";\r\n";
+
+                                passwd+="CREATE TABLE t"+i+"(pwd nvarchar(50) NULL);\r\n";
+
+                                for(var j=0;j<arrayPasswd.length;j++)
+
+                                {
+
+                                        passwd+="insert into t" + i + " values('" + arrayPasswd[i].substr(j,1)+"');\r\n";
+
+                                }
+
+                        }
+
+                        passwd+="select t0.pwd,t1.pwd,t2.pwd,t3.pwd,t4.pwd,t5.pwd,t6.pwd,t7.pwd from t0,t1,t2,t3,t4,t5,t6,t7";
+
+                        $('dspSql').value=passwd;
+
+//                        var arrayXH = new Array(passwdLen);
+
+//                        for(var j=0;j<passwdLen;j++)
+
+//                        {
+
+//                                arrayXH[j]=arrayPasswd[j].length;
+
+//                        }
+
+//                        for(var j=0;j<passwdLen;j++)
+
+//                        {
+
+//                                for(var k=0;k<arrayXH[j];k++)
+
+//                                {
+
+//                                        k*10+
+
+//                                }
+
+//                        }
+
+                }
+
+</script>
+
+
+
+</head>
+
+<body>
+
+<span style="text-align:center">TPLINK_Auth_Key_计算器（新用户界面登录密码演算）  </span><br />
+
+<span style="text-align:center">免责声明：本计算器程序(方法)可能带有攻击性，仅供安全研究与教学之用，<br />用户将其信息做其他用途，由用户承担全部法律及连带责任，本人不承担任何法律及连带责任。
+
+</span>
+
+<form action="" method="get"><fieldset><legend>源码测试</legend>
+
+
+
+密码[最小6位]：
+
+    <input name="pwd" type="text" id="pwd" size="15" maxlength="15" />
+
+<input type="button" name="btnOK" id="btnOK" value="计算KEY" onclick="lgDoSub()" />
+
+<br />
+
+<br />
+
+显示 pwd：
+
+<input name="dspPwd" type="text" id="dspPwd" />
+
+<br />
+
+<br />
+
+显示 strDe：
+
+<input name="dspStrDe" type="text" id="dspStrDe" />
+
+<br />
+
+<br />
+
+显示 Dic：
+
+<textarea name="dspDic" cols="70" rows="4" id="dspDic"></textarea>
+
+<br />
+
+<br />
+
+显示 ASC码表：
+
+<textarea name="dspAsc" cols="70" rows="2" id="dspAsc"></textarea>
+
+<br />
+
+<br />
+
+结果 Auth_key：
+
+<input name="dspAuthKey" type="text" id="dspAuthKey" />
+
+字符宽度：
+
+<input name="dspLen" type="text" id="dspLen" size="5" />
+
+</fieldset>
+
+</form>
+
+<br /><br />
+
+
+
+<form action="" method="get">
+
+<fieldset>
+
+<legend>你懂得</legend>
+
+  Auth_key【演示字符19830917】：
+
+  <input name="authKey" type="text" id="authKey" value="0rZily4W9TefbwK" size="15" maxlength="15" />
+
+  <input type="button" name="btnCup" id="btnCup" value="解密KEY" onclick="AuthKeyCup()" />
+
+  15位:0rZily4W9TefbwK<br />
+
+  <br />
+
+原始密码字符【从首行由上到下，每行任选1个字符对应密码一位，组成密码串，N行字符==N位密码】：<br />
+
+<textarea name="dspPasswd" cols="70" rows="10" id="dspPasswd"></textarea>
+
+<br />
+
+<br />
+
+数据库查询SQL：
+
+<textarea name="dspSql" cols="70" rows="10" id="dspSql"></textarea>
+
+</fieldset>
+
+</form>
+
+</body>
+
+</html>

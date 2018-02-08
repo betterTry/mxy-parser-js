@@ -1,10 +1,10 @@
 import mxy from './lib';
 
-const result = new mxy.tokenizer('var a = 1;for(;;){};if(a) {a = 3}');
-for (let i = 0; i < 25; i++) {
+const result = new mxy.tokenizer('do{}while()');
+for (let i = 0; i < 10; i++) {
   console.log(result.next_token());
 }
-const res = new mxy.lexer('var a = 1;for(;;){};if(a) {a = 3}');
+const res = new mxy.lexer('do{}while()');
 console.log(res.result);
 
 
