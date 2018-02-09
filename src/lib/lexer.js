@@ -256,10 +256,11 @@ class lexer {
 
   do_() {
     const body = this.statement();
+
     this.expect_token('keyword', 'while');
     this.expect('(');
     const cond = this.parentheses_();
-    return as('do', body[1], cond[1]);
+    return as('do', body, cond);
   }
 
   if_() {
