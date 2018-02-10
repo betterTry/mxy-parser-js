@@ -78,7 +78,7 @@ class lexer {
 
   expect_token(type, value) {
     if (this.is(type, value)) return this.prog(this.current, this.next);
-    this.throw_error(`Unexpected token: ${type} (${this.current.value})`);
+    this.throw_error(`Unexpected token: ${type} ${this.current.value}`);
   }
 
   expect(value) {
@@ -86,7 +86,7 @@ class lexer {
   }
 
   unexpected(token) {
-    this.throw_error(`Unexpected token: ${token && token.type || this.current.type} (${token && token.value || this.current.value})`);
+    this.throw_error(`Unexpected token: ${token && token.type || this.current.type} ${token && token.value || this.current.value}`);
   }
 
   var_() {
@@ -157,7 +157,15 @@ class lexer {
   }
 
   new_() {
-
+    let func, params;
+    if (this.is_token('name')) {
+      func = this.current.value;
+      this.expect(')');
+      params = this.parentheses_();
+    } else {
+      func = this.function_();
+    }
+    return as('new', func, params);
   }
 
   property_name() {
@@ -254,6 +262,23 @@ class lexer {
     }
   }
 
+  try_() {
+    const body = this.statement();
+    this.expect_token('keyword', 'catch');
+    this.expect('(');
+    const e = this.expect_token('name');
+    this.expect(')');
+    const cat = this.statement();
+    return as('try', body, e, cat);
+  }
+
+  while_() {
+    this.expect('(');
+    const cond = this.parentheses_();
+    const body = this.statement();
+    return as('while', cond, body);
+  }
+
   do_() {
     const body = this.statement();
 
@@ -274,8 +299,9 @@ class lexer {
     return as('if', cond[1], body, ebody);
   }
 
-  parentheses_() {
-    const expr = this.is('punc', ')') ? [] : this.expression();
+  parentheses_(commas) {
+    if (!arguments.length) commas = true;
+    const expr = this.is('punc', ')') ? [] : this.expression(commas);
     this.expect(')');
     return as('parentheses', expr);
   }
@@ -430,6 +456,12 @@ class lexer {
             return this.if_();
           case 'do':
             return this.do_();
+          case 'while':
+            return this.while_();
+          case 'try':
+            return this.try_();
+          case 'new':
+            return this.new_();
         }
       case 'name':
         return this.is_token(this.peek(), 'punc', ':') ? this.label_() : this.simple_statement();

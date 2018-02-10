@@ -1,10 +1,10 @@
 import mxy from './lib';
 
-const result = new mxy.tokenizer('do{}while()');
+const result = new mxy.tokenizer('do{}while(a/=2/)');
 for (let i = 0; i < 10; i++) {
   console.log(result.next_token());
 }
-const res = new mxy.lexer('do{}while()');
+const res = new mxy.lexer('do{var a = 1}while(a = 1);while(a, b) {}; try {}catch(a) {}');
 console.log(res.result);
 
 
