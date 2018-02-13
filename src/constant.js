@@ -12,7 +12,6 @@ export const KEY_WORDS = array_to_hash([
   'throw',
   'continue',
   'debugger',
-  'console',
   'for',
   'while',
   'do',

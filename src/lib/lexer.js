@@ -147,7 +147,7 @@ class lexer {
     }
     if (name !== null) {
       if (!member(this.S.labels, name)) {
-        this.throw_error('Uncaught SyntaxError: Undefined label "a"');
+        this.throw_error(`Uncaught SyntaxError: Undefined label ${name}`);
       }
     } else if (!this.S.in_loop || type == 'break' && !this.S.in_block) {
       // break label can exist in block statement;
@@ -156,16 +156,52 @@ class lexer {
     return as(type, name);
   }
 
-  new_() {
-    let func, params;
-    if (this.is_token('name')) {
-      func = this.current.value;
-      this.expect(')');
-      params = this.parentheses_();
-    } else {
-      func = this.function_();
+  function_(anonymous = true) {
+    let name;
+    if (!anonymous || this.is('name')) {
+      name = as('name', this.expect_token('name').value);
     }
-    return as('new', func, params);
+    this.expect_token('punc', '(');
+    const params = this.expr_list(')', false, true, 'name');
+    return as('function', name, params);
+  }
+
+  new_() {
+    let args;
+    const exp = this.expr_simple_expr(false);
+    if (this.is('punc', '(')) {
+      this.next();
+      args = this.expr_list(')', false, false);
+    } else {
+      args = [];
+    }
+    return as('new', exp, args);
+  }
+
+  switch_() {
+    this.expect('(');
+    const target = this.parentheses_();
+    this.expect('{');
+    const case_block = [];
+    let k = '';
+    while(this.is('keyword', 'case') || this.is('keyword', 'default')) {
+      k = this.prog(this.current.value, this.next);
+      let cond = '';
+      if (k === 'case') {
+        cond = this.expression();
+      }
+      this.expect(':');
+      const stat = this.statement();
+      console.log(stat);
+      case_block.push(as(k, cond, stat));
+    }
+    this.expect('}');
+    return as('switch', target, case_block);
+  }
+
+  throw__() {
+    const expr = this.expression();
+    return as('throw', expr);
   }
 
   property_name() {
@@ -182,11 +218,11 @@ class lexer {
 
   object_() {
     let first = true, ret = [];
-    while(!this.is('}')) {
+    while(!this.is('punc', '}')) {
       if (first) first = false;
       else this.expect(',');
       const name = this.property_name();
-      if (this.is('name') && (name == 'get' || name == 'set') && !this.is(':')) {
+      if (this.is('name') && (name == 'get' || name == 'set') && !this.is('punc', ':')) {
         ret.push([as(name, this.function_())]);
       } else {
         this.expect(':');
@@ -196,7 +232,7 @@ class lexer {
     return this.prog(as('object', ret), this.next);
   }
 
-  expr_list(closem, allow_empty, force_empty) {
+  expr_list(close, allow_empty, force_empty, expr_type) {
     let first = true, ret = [];
     while(!this.is('punc', close)) {
       if (first) first = false;
@@ -204,13 +240,19 @@ class lexer {
       if (this.is('punc', ',')) {
         if (force_empty) this.throw_error('Unexpected token ,');
         if (allow_empty) ret.push(['atom', 'undefined']);
-      } else ret.push(this.expression());
+      } else {
+        if (expr_type) {
+          ret.push(as(expr_type, this.expect_token(expr_type).value));
+        } else {
+          ret.push(this.expression());
+        }
+      }
     }
     return this.prog(ret, this.next);
   }
 
   subscript(expr, allow_call) {
-    if (this.is('punc', '(')) {
+    if (allow_call && this.is('punc', '(')) { // 在这里不对参数进行判断了，出来再进行判断;
       this.next();
       return this.subscript(as('call', expr, this.expr_list(')')), allow_call);
     }
@@ -306,7 +348,7 @@ class lexer {
     return as('parentheses', expr);
   }
 
-  expr_simple_expr() {
+  expr_simple_expr(allow_call) {
     if (this.is('operator', 'new')) {
       this.next();
       return this.new_();
@@ -315,13 +357,13 @@ class lexer {
       switch(this.current.value) {
         case '(':
           this.next();
-          return this.parentheses_();
+          return this.subscript(this.parentheses_(), allow_call);
         case '{':
           this.next();
-          return this.subscript(this.object_());
+          return this.subscript(this.object_(), allow_call);
         case '[':
           this.next();
-          return this.subscript(this.array_());
+          return this.subscript(this.array_(), allow_call);
       }
     }
     if (this.is('keyword', 'function')) {
@@ -332,7 +374,7 @@ class lexer {
       const atom = this.current.type == 'regexp'
         ? as('regexp', this.current.value[0], this.current.value[1])
         : as(this.current.type, this.current.value);
-      return this.subscript(this.prog(atom, this.next));
+      return this.subscript(this.prog(atom, this.next), allow_call);
     }
     this.throw_error(`Unexpected token ${this.current.value}`);
   }
@@ -346,7 +388,7 @@ class lexer {
     if (hit_obj(UNARY_PREFIX, this.current.value)) {
       return this.make_unary('unary-prefix', this.prog(this.current.value, this.next), this.maybe_unary());
     }
-    let val = this.expr_simple_expr();
+    let val = this.expr_simple_expr(true);
     while (this.is('operator') && hit_obj(UNARY_POSTFIX, this.current.value) && !this.current.nlb) {
       val = this.make_unary('unary_postfix', this.current.value, val);
       this.next();
@@ -462,9 +504,15 @@ class lexer {
             return this.try_();
           case 'new':
             return this.new_();
+          case 'throw':
+            return this.throw__();
+          case 'switch':
+            return this.switch_();
         }
       case 'name':
-        return this.is_token(this.peek(), 'punc', ':') ? this.label_() : this.simple_statement();
+        var p = this.peek();
+        console.log(p);
+        return this.is_token(p, 'punc', ':') ? this.label_() : this.simple_statement();
     }
   }
 
