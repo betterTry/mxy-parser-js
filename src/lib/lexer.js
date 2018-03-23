@@ -183,17 +183,18 @@ class lexer {
     const target = this.parentheses_();
     this.expect('{');
     const case_block = [];
-    let k = '';
-    while(this.is('keyword', 'case') || this.is('keyword', 'default')) {
-      k = this.prog(this.current.value, this.next);
-      let cond = '';
-      if (k === 'case') {
+    let k, cond, stat;
+    while (!this.is('punc', '}')) {
+      if (this.is('eof')) this.unexpected();
+      if (this.is('keyword', 'case') || this.is('keyword', 'default')) {
+        stat = [];
+        k = this.prog(this.current.value, this.next);
         cond = this.expression();
+        this.expect(':');
+        case_block.push(as(k, cond, stat));
+      } else {
+        stat.push(this.statement());
       }
-      this.expect(':');
-      const stat = this.statement();
-      console.log(stat);
-      case_block.push(as(k, cond, stat));
     }
     this.expect('}');
     return as('switch', target, case_block);
