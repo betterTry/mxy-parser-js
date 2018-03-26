@@ -8,7 +8,7 @@ import tokenizer from './tokenizer';
 import js_error from './js_error';
 import {as, member, hit_obj, precedence} from '../utils';
 
-class lexer {
+class parser {
   constructor($TEXT, strict_mode) {
     this.tokenizer = typeof $TEXT == 'string' ? new tokenizer($TEXT) : $TEXT;
     this.S = {
@@ -95,7 +95,7 @@ class lexer {
       const name = this.expect_token('name').value;
       if (this.is('operator', '=')) {
         this.next();
-        ret.push([name, this.expression()]);
+        ret.push([name, this.expression(false)]);
       } else {
         ret.push(name);
       }
@@ -105,12 +105,12 @@ class lexer {
     return as('var', ret);
   }
 
-  in_loop(expr) {
+  loop(expr) {
     try {
-      this.in_loop = true;
-      return expr.bind(this)();
+      this.S.in_loop = true;
+      return expr && expr.bind(this)();
     } finally {
-      this.in_loop = false;
+      this.S.in_loop = false;
     }
   }
 
@@ -120,7 +120,7 @@ class lexer {
     this.expect(';');
     const end = this.is('punc', ')') ? null : this.expression();
     this.expect(')');
-    return as('for', init, test, end, this.in_loop(this.statement));
+    return as('for', init, test, end, this.loop(this.statement));
   }
 
   for_() {
@@ -149,7 +149,7 @@ class lexer {
       if (!member(this.S.labels, name)) {
         this.throw_error(`Uncaught SyntaxError: Undefined label ${name}`);
       }
-    } else if (!this.S.in_loop || type == 'break' && !this.S.in_block) {
+    } else if (!this.S.in_loop) {
       // break label can exist in block statement;
       this.throw_error(`Uncaught SyntaxError: Illegal ${type} statement`);
     }
@@ -163,7 +163,8 @@ class lexer {
     }
     this.expect_token('punc', '(');
     const params = this.expr_list(')', false, true, 'name');
-    return as('function', name, params);
+    const block = this.block_();
+    return as('function', name, block, params);
   }
 
   new_() {
@@ -179,25 +180,27 @@ class lexer {
   }
 
   switch_() {
-    this.expect('(');
-    const target = this.parentheses_();
-    this.expect('{');
-    const case_block = [];
-    let k, cond, stat;
-    while (!this.is('punc', '}')) {
-      if (this.is('eof')) this.unexpected();
-      if (this.is('keyword', 'case') || this.is('keyword', 'default')) {
-        stat = [];
-        k = this.prog(this.current.value, this.next);
-        cond = this.expression();
-        this.expect(':');
-        case_block.push(as(k, cond, stat));
-      } else {
-        stat.push(this.statement());
+    return this.loop(function() {
+      this.expect('(');
+      const target = this.parentheses_();
+      this.expect('{');
+      const case_block = [];
+      let k, cond, stat;
+      while (!this.is('punc', '}')) {
+        if (this.is('eof')) this.unexpected();
+        if (this.is('keyword', 'case') || this.is('keyword', 'default')) {
+          stat = [];
+          k = this.prog(this.current.value, this.next);
+          cond = this.expression();
+          this.expect(':');
+          case_block.push(as(k, cond, stat));
+        } else {
+          stat.push(this.statement());
+        }
       }
-    }
-    this.expect('}');
-    return as('switch', target, case_block);
+      this.expect('}');
+      return as('switch', target, case_block);
+    });
   }
 
   throw__() {
@@ -211,7 +214,7 @@ class lexer {
       case 'string':
       case 'keyword':
       case 'atom':
-        return this.prog(this.current.name, this.next);
+        return this.prog(this.current.value, this.next);
       default:
         this.throw_error('Unexpected property name');
     }
@@ -259,7 +262,7 @@ class lexer {
     }
     if (this.is('punc', '.')) {
       this.next();
-      this.subscript(as('dot', expr, this.property_name()), allow_call);
+      return this.subscript(as('dot', expr, this.property_name()), allow_call);
     }
     if (this.is('punc', '[')) {
       this.next();
@@ -278,11 +281,10 @@ class lexer {
       this.unexpected(cache);
     this.S.pop();
     return as('label', label, stat);
-
   }
 
   block_() {
-    this.next();
+    this.expect('{');
     const ret = [];
     while(!this.is('punc', '}')) {
       ret.push(this.statement());
@@ -306,13 +308,21 @@ class lexer {
   }
 
   try_() {
-    const body = this.statement();
-    this.expect_token('keyword', 'catch');
-    this.expect('(');
-    const e = this.expect_token('name');
-    this.expect(')');
-    const cat = this.statement();
-    return as('try', body, e, cat);
+    const body = this.block_();
+    let cat, e, fina;
+
+    if (this.is('keyword', 'catch')) {
+      this.next();
+      this.expect('(');
+      e = this.expect_token('name').value;
+      this.expect(')');
+      cat = this.block_();
+    }
+    if (this.is('keyword', 'finally')) {
+      this.next();
+      fina = this.block_();
+    }
+    return as('try', body, e, cat, fina);
   }
 
   while_() {
@@ -448,8 +458,7 @@ class lexer {
   }
 
   // left-hand-site expression;
-  expression(commas) {
-    if (!arguments.length) commas = true;
+  expression(commas = true) {
     const expr = this.maybe_assign(commas);
     if (commas && this.is('punc', ',')) {
       this.next();
@@ -471,6 +480,7 @@ class lexer {
     //   return this.tokenizer.read_regexp();
     // }
     const stat_type = this.current.type;
+    const stat_name = this.current.value;
     switch(stat_type) {
       case 'punc':
         switch(this.current.value) {
@@ -482,7 +492,7 @@ class lexer {
             return this.parentheses_();
           case ';':
             this.next();
-            return as('block');
+            return as('comma');
           default:
             this.unexpected();
         }
@@ -490,7 +500,7 @@ class lexer {
         switch(this.prog(this.current.value, this.next)) {
           case 'break':
           case 'continue':
-            return this.break_continue(stat_type);
+            return this.break_continue(stat_name);
           case 'for':
             return this.for_();
           case 'var':
@@ -512,7 +522,6 @@ class lexer {
         }
       case 'name':
         var p = this.peek();
-        console.log(p);
         return this.is_token(p, 'punc', ':') ? this.label_() : this.simple_statement();
     }
   }
@@ -525,10 +534,13 @@ class lexer {
     return ret;
   }
 
-  get result() {
-    return as('toplevel', this.top_loop());
+  exec() {
+    if (!this.result) {
+      this.result = as('toplevel', this.top_loop());
+    }
+    return this.result;
   }
-
 }
 
-export default lexer;
+
+export default parser;

@@ -28,6 +28,7 @@ export const KEY_WORDS = array_to_hash([
   'default',
   'in',
   'delete',
+  'finally',
 ]);
 
 export const RESERVED_WORDS = array_to_hash([
