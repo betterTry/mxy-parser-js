@@ -500,7 +500,7 @@ class parser {
         switch(this.prog(this.current.value, this.next)) {
           case 'break':
           case 'continue':
-            return this.break_continue(stat_type);
+            return this.break_continue(stat_name);
           case 'function':
             return this.function_();
           case 'for':
