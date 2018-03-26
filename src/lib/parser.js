@@ -66,7 +66,7 @@ class parser {
 
   semicolon() {
     if (this.is('punc', ';')) this.next();
-    else if (!this.can_insert_semicolon()) this.throw_error();
+    else if (this.can_insert_semicolon()) this.throw_error();
   }
   prog(ret) {
     if (ret instanceof Function) ret = ret();
@@ -95,7 +95,7 @@ class parser {
       const name = this.expect_token('name').value;
       if (this.is('operator', '=')) {
         this.next();
-        ret.push([name, this.expression()]);
+        ret.push([name, this.expression(false)]);
       } else {
         ret.push(name);
       }
@@ -105,12 +105,12 @@ class parser {
     return as('var', ret);
   }
 
-  in_loop(expr) {
+  loop(expr) {
     try {
-      this.in_loop = true;
-      return expr.bind(this)();
+      this.S.in_loop = true;
+      return expr && expr.bind(this)();
     } finally {
-      this.in_loop = false;
+      this.S.in_loop = false;
     }
   }
 
@@ -120,7 +120,7 @@ class parser {
     this.expect(';');
     const end = this.is('punc', ')') ? null : this.expression();
     this.expect(')');
-    return as('for', init, test, end, this.in_loop(this.statement));
+    return as('for', init, test, end, this.loop(this.statement));
   }
 
   for_() {
@@ -149,7 +149,7 @@ class parser {
       if (!member(this.S.labels, name)) {
         this.throw_error(`Uncaught SyntaxError: Undefined label ${name}`);
       }
-    } else if (!this.S.in_loop || type == 'break' && !this.S.in_block) {
+    } else if (!this.S.in_loop) {
       // break label can exist in block statement;
       this.throw_error(`Uncaught SyntaxError: Illegal ${type} statement`);
     }
@@ -163,7 +163,8 @@ class parser {
     }
     this.expect_token('punc', '(');
     const params = this.expr_list(')', false, true, 'name');
-    return as('function', name, params);
+    const block = this.block_();
+    return as('function', name, block, params);
   }
 
   new_() {
@@ -178,43 +179,28 @@ class parser {
     return as('new', exp, args);
   }
 
-  with_() {
-    return this.as('with', this.expression(), this.statement());
-  }
-
-  return_() {
-    const expr = this.expression();
-    return as('return', expr);
-  }
-
-  debug_() {
-    this.semicolon();
-    return as('debugger');
-  }
-
   switch_() {
-    this.expect('(');
-    const target = this.parentheses_();
-    this.expect('{');
-    let c = [], b = null;
-    while(!this.is('punc', '}')) {
-      if (this.is('eof')) this.unexpected();
-      if (this.is('keyword', 'case')) {
-        this.next();
-        b = [];
-        c.push(as('case', this.expression(), b));
-        this.expect(':');
-      } else if (this.is('keyword', 'default')) {
-        this.next();
-        b = [];
-        this.expect(':');
-        c.push(as('default', b));
-      } else {
-        b.push(this.statement());
+    return this.loop(function() {
+      this.expect('(');
+      const target = this.parentheses_();
+      this.expect('{');
+      const case_block = [];
+      let k, cond, stat;
+      while (!this.is('punc', '}')) {
+        if (this.is('eof')) this.unexpected();
+        if (this.is('keyword', 'case') || this.is('keyword', 'default')) {
+          stat = [];
+          k = this.prog(this.current.value, this.next);
+          cond = this.expression();
+          this.expect(':');
+          case_block.push(as(k, cond, stat));
+        } else {
+          stat.push(this.statement());
+        }
       }
-    }
-    this.next();
-    return as('switch', target, c);
+      this.expect('}');
+      return as('switch', target, case_block);
+    });
   }
 
   throw__() {
@@ -295,7 +281,6 @@ class parser {
       this.unexpected(cache);
     this.S.pop();
     return as('label', label, stat);
-
   }
 
   block_() {
@@ -324,20 +309,18 @@ class parser {
 
   try_() {
     const body = this.block_();
-    let e, cat, fina;
+    let cat, e, fina;
+
     if (this.is('keyword', 'catch')) {
       this.next();
       this.expect('(');
-      e = as('name', this.expect_token('name').value);
+      e = this.expect_token('name').value;
       this.expect(')');
       cat = this.block_();
     }
     if (this.is('keyword', 'finally')) {
       this.next();
       fina = this.block_();
-    }
-    if (!cat && !fina) {
-      this.throw_error('Uncaught SyntaxError: Missing catch or finally after try');
     }
     return as('try', body, e, cat, fina);
   }
@@ -475,8 +458,7 @@ class parser {
   }
 
   // left-hand-site expression;
-  expression(commas) {
-    if (!arguments.length) commas = true;
+  expression(commas = true) {
     const expr = this.maybe_assign(commas);
     if (commas && this.is('punc', ',')) {
       this.next();
@@ -498,6 +480,7 @@ class parser {
     //   return this.tokenizer.read_regexp();
     // }
     const stat_type = this.current.type;
+    const stat_name = this.current.value;
     switch(stat_type) {
       case 'punc':
         switch(this.current.value) {
@@ -509,7 +492,7 @@ class parser {
             return this.parentheses_();
           case ';':
             this.next();
-            return as('block');
+            return as('comma');
           default:
             this.unexpected();
         }
@@ -561,15 +544,13 @@ class parser {
     return ret;
   }
 
-  get result() {
-    return as('toplevel', this.top_loop());
+  exec() {
+    if (!this.result) {
+      this.result = as('toplevel', this.top_loop());
+    }
+    return this.result;
   }
-
-  toString() {
-    return JSON.stringify(this.result);
-  }
-
-
 }
+
 
 export default parser;
