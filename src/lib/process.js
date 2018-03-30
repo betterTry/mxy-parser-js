@@ -1,6 +1,7 @@
 import parser from './parser';
 import {hit_obj, as} from '../utils';
 const res = new parser(`
+  function c(){}
   do{
     var a = 1, b = 2;
     console.log(2);
@@ -63,6 +64,17 @@ const walker = {
   function(cont) {
     const _stack = new Scope();
     const par = getStack();
+    par.children.push(_stack);
+    _stack.parent = _stack;
+    cont[3].forEach((item) => {
+      _stack.eo[item[1]] = undefined;
+    });
+    return as(cont[0], cont[1], map(cont[2], walker));
+  },
+  defun(cont) {
+    const _stack = new Scope();
+    const par = getStack();
+    par.eo[cont[1][1]] = cont[2];
     par.children.push(_stack);
     _stack.parent = _stack;
     cont[3].forEach((item) => {

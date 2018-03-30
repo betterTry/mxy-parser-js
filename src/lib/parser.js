@@ -18,7 +18,7 @@ class parser {
       in_directive: true,
       labels: [],
       in_loop: false,
-      in_block: false,
+      in_func: 0,
       strict_mode: strict_mode,
     };
   }
@@ -56,18 +56,19 @@ class parser {
   }
 
   // https://www.ecma-international.org/ecma-262/5.1/#sec-7.9
-  can_insert_semicolon() {
-    return this.S.token.line_before || this.is('eof') || this.is('punc', '}');
+  can_auto_insert_semicolon() {
+    return !this.S.strict_mode && (this.S.token.line_before || this.is('eof') || this.is('punc', '}'));
+  }
+
+  semicolon() {
+    if (this.is('punc', ';')) this.next();
+    else if (this.can_auto_insert_semicolon()) this.throw_error(); // 这种情况是严格模式时才会发生的; 严格模式不允许存在分号;
   }
 
   is_atom_token() {
     return /^(?:name|atom|num|string|regexp)$/.test(this.current.type);
   }
 
-  semicolon() {
-    if (this.is('punc', ';')) this.next();
-    else if (this.can_insert_semicolon()) this.throw_error();
-  }
   prog(ret) {
     if (ret instanceof Function) ret = ret();
     for (let i = 1; i < arguments.length; i++) {
@@ -142,7 +143,7 @@ class parser {
 
   break_continue(type) {
     let name;
-    if (!this.can_insert_semicolon()) {
+    if (!this.can_auto_insert_semicolon()) {
       name = this.is('name') ? this.current.value : null;
     }
     if (name !== null) {
@@ -157,6 +158,8 @@ class parser {
   }
 
   function_(anonymous = true) {
+    this.S.in_func += 1;
+    this.S.in_directive = true;
     let name;
     if (!anonymous || this.is('name')) {
       name = as('name', this.expect_token('name').value);
@@ -164,7 +167,8 @@ class parser {
     this.expect_token('punc', '(');
     const params = this.expr_list(')', false, true, 'name');
     const block = this.block_();
-    return as('function', name, block, params);
+    this.S.in_func -= 1;
+    return as(anonymous ? 'function' : 'defun', name, block, params);
   }
 
   new_() {
@@ -177,6 +181,29 @@ class parser {
       args = [];
     }
     return as('new', exp, args);
+  }
+
+  with_() {
+    this.expect('(');
+    const context = this.parentheses_();
+    const body = this.block_();
+    return as('with', context, body);
+  }
+
+  return_() {
+    if (!this.S.in_func) this.unexpected();
+    let body;
+    if (this.is('punc', ';')) {
+      body = undefined;
+    } else if (!this.can_auto_insert_semicolon()) {
+      body = this.prog(this.expression, this.next);
+    }
+    return as('return', body);
+  }
+
+  debug_() {
+    this.semicolon();
+    return as('debug');
   }
 
   switch_() {
@@ -482,6 +509,17 @@ class parser {
     const stat_type = this.current.type;
     const stat_name = this.current.value;
     switch(stat_type) {
+      case 'string':
+        var is_in_directive = this.S.in_directive;
+        var stat = this.statement();
+        if (is_in_directive && stat[0] == 'string' && !this.is('punc', ',')) {
+          return as('directive', stat_name);
+        } // 指令必须在函数或全局的首行; eval括起的字符串也支持指令;
+        return stat;
+      case 'operator':
+      case 'atom':
+      case 'num':
+        return this.expr_simple_expr();
       case 'punc':
         switch(this.current.value) {
           case '{':
@@ -502,7 +540,7 @@ class parser {
           case 'continue':
             return this.break_continue(stat_name);
           case 'function':
-            return this.function_();
+            return this.function_(false);
           case 'for':
             return this.for_();
           case 'var':
