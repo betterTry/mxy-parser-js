@@ -95,6 +95,18 @@ export function log() {
   console.log.apply(null, arguments);
 }
 
+export function prog(ret, ...args) {
+  if (ret instanceof Function) ret = ret();
+  args.forEach((item) => {
+    item();
+  });
+  return ret;
+}
+
+export function last(arr) {
+  return last(arr.length - 1);
+}
+
 
 export const precedence = !function () {
   // 赋值符; -2

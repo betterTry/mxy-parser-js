@@ -530,7 +530,7 @@ class parser {
             return this.parentheses_();
           case ';':
             this.next();
-            return as('comma');
+            return as('semicolon');
           default:
             this.unexpected();
         }
