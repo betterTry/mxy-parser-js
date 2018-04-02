@@ -5,14 +5,16 @@
  *
 */
 import parser from './parser';
-// import {mangle} from '../constant';
-import {hit_obj, as, prog} from '../utils';
+import {base64} from '../constant';
+import {hit_obj, hit_parent, prog, curry} from '../utils';
 const res = new parser(`
+  var g = 1, asda = 2, asdas = 3, asjajsjasj = 4;
   a = 1;
   function c(){
     function d() {
       console.log(c);
       var a = 1;
+      g = 2;
     }
   }
   do{
@@ -39,49 +41,60 @@ const res = new parser(`
       console.log(b);
   }`);
 
-const stack = [];
-const getstack = () => stack[stack.length - 1];
+const stack = {
+  data: [],
+  current() {
+    return stack.data[stack.data.length - 1];
+  },
+  pop() {
+    stack.data.pop();
+  },
+  push(scope) {
+    stack.data.push(scope);
+  },
+  getStack() {
+    return stack.data;
+  },
+};
 
 class Scope {
   constructor() {
     this.children = [];
     this.parent = null;
     this.eo = {};
-    this.body = null;
+    this.ao = {};
+    this.mangle = {};
   }
-
-  getstack() {
-    return stack[stack.length - 1];
+  canMangle(name) {
+    return !this.hasMangle() && !hit_obj(this.ao, name) && hit_obj(this.eo, name);
   }
-
-  pushstack() {
-    stack.push(this);
+  addMangle(old, n) {
+    this.mangle[old] = n;
   }
-
-  popstack() {
-    stack.pop();
+  hasMangle(name) {
+    return hit_obj(this.mangle, name);
   }
 }
 
 const walk = {
   walker: {
     toplevel(cont) {
-      const scope = new Scope();
-      scope.pushstack(scope);
-      const body = as(cont[0], map(cont[1], walk.walker));
-      body.scope = scope;
-      return prog(body, scope.popstack);
+      stack.push(cont.scope || new Scope());
+      map(cont[1], walk.getWalker());
+      return prog(cont, stack.pop);
     },
     do(cont) {
-      return as(cont[0], map(cont[1], walk.walker), cont[2]);
+      map(cont[1], walk.getWalker());
+      return cont;
     },
     block(cont) {
-      return as(cont[0], map(cont[1], walk.walker));
+      map(cont[1], walk.getWalker());
+      return cont;
     },
     var(cont) {
-      const _stack = getstack();
+      const scope = stack.current();
       cont[1].forEach((item) => {
-        _stack.eo[item[0]] = item[1];
+        scope.eo[item[0]] = item[1];
       });
       return cont;
     },
@@ -89,50 +102,35 @@ const walk = {
       return cont;
     },
     while(cont) {
-      console.log(cont);
-      return as(cont[0], cont[1], map(cont[2], walk.walker));
-    },
-    try(cont) {
-      return as(cont[0], map(cont[1], walk.walker), cont[2], map(cont[3], walk.walker), map(cont[4], walk.walker));
-    },
-    new(cont) {
-      return as(cont[0], cont[1][0] === 'function' ? map(cont[1], walk.walker) : cont[1], cont[2]);
-    },
-    function(cont) {
-      const scope = new Scope();
-      const par = scope.getstack();
-      scope.pushstack(scope);
-      par.children.push(scope);
-      scope.parent = par;
-      cont[3].forEach((item) => {
-        scope.eo[item[1]] = undefined;
-      });
-      const body = as(cont[0], cont[1], map(cont[2], walk.walker, scope), cont[3]);
-      body.scope = scope;
-      return prog(body, scope.popstack);
-    },
-    defun(cont) {
-      const scope = new Scope();
-      const par = scope.getstack();
-      scope.pushstack(scope);
-      par.eo[cont[1][1]] = cont[2];
-      par.children.push(scope);
-      scope.parent = par;
-      console.log(cont);
-      cont[3].forEach((item) => {
-        scope.eo[item[1]] = undefined;
-      });
-      const body = as(cont[0], cont[1], map(cont[2], walk.walker), cont[3]);
-      body.scope = scope;
-      return prog(body, scope.popstack);
-    },
-    switch(cont) {
-      return as(cont[0], cont[1], map(cont[2], walk.walker));
-    },
-    case(cont) {
+      map(cont[2], walk.getWalker());
       return cont;
     },
-    stat(cont) {
+    try(cont) {
+      map(cont[1], walk.getWalker());
+      map(cont[3], walk.getWalker());
+      map(cont[4], walk.getWalker());
+      return cont;
+    },
+    new(cont) {
+      if (cont[1][0] === 'function') map(cont[1], walk.getWalker());
+      return cont;
+    },
+    function(cont) {
+      stack.push(cont.scope || new Scope());
+      map(cont[2], walk.getWalker());
+      return prog(cont, stack.pop);
+    },
+    defun(cont) {
+      const scope = cont.scope || new Scope();
+      stack.push(scope);
+      map(cont[2], walk.getWalker());
+      return prog(cont, stack.pop);
+    },
+    switch(cont) {
+      map(cont[2], walk.getWalker());
+      return cont;
+    },
+    case(cont) {
       return cont;
     },
     call(cont) {
@@ -141,9 +139,24 @@ const walk = {
     dot(cont) {
       return cont;
     },
+    name(cont) {
+      return cont;
+    },
+    binary(cont) {
+      map(cont[2], walk.getWalker());
+      map(cont[3], walk.getWalker());
+      return cont;
+    },
+    stat(cont) {
+      map(cont[1], walk.getWalker());
+      return cont;
+    },
   },
   setWalker(walker) {
-    Object.assign(this.walker, walker);
+    return this.newWalker = Object.assign({}, this.walker, walker);
+  },
+  getWalker() {
+    return this.newWalker || this.walker;
   },
 };
 
@@ -161,32 +174,148 @@ const map = function(target, handle) {
   }
 };
 
+const domap = curry(map, walk.newWalker || walk.walker);
+console.log(domap);
+
+const addscope = (ast) => map(ast, walk.setWalker({
+  toplevel(cont) {
+    const scope = new Scope();
+    stack.push(cont.scope = scope);
+    map(cont[1], walk.getWalker());
+    return prog(cont, stack.pop);
+  },
+  defun(cont) {
+    const scope = new Scope();
+    const par = stack.current();
+    stack.push(scope);
+    map(cont[2], walk.getWalker());
+
+    par.eo[cont[1][1]] = cont[2];
+    par.children.push(cont.scope = scope);
+    scope.parent = par;
+    cont[3].forEach((item) => {
+      scope.eo[item[1]] = undefined;
+    });
+    
+    return prog(cont, stack.pop);
+  },
+  function(cont) {
+    const scope = new Scope();
+    const par = stack.current();
+    stack.push(scope);
+    map(cont[2], walk.getWalker());
+
+    par.children.push(cont.scope = scope);
+    scope.parent = par;
+    cont[3].forEach((item) => {
+      scope.eo[item[1]] = undefined;
+    });
+
+    return prog(cont, stack.pop);
+  },
+}));
+const addao = (ast) => map(ast, walk.setWalker({
+  toplevel(cont) {
+    stack.push(cont.scope);
+    map(cont[1], walk.getWalker());
+    return prog(cont, stack.pop);
+  },
+  name(cont) {
+    const scope = stack.current();
+    if (hit_obj(scope.eo, cont[1])) {
+      scope.ao[cont[1]] = true;
+    } else {
+      hit_parent(scope, cont[1]);
+    }
+    return cont;
+  },
+}));
+
+const mangle = {
+  base64,
+  num: 0,
+  getString(not) {
+    let base = 54;
+    let ret = '';
+    let num;
+    do {
+      ret += this.base64.charAt(this.num % base);
+      num = Math.floor(num / base64);
+      base = 64;
+    } while(num > 0 || ret == not && ++this.num);
+    this.num++;
+    return ret;
+  },
+  reset() {
+    this.num = 0;
+  },
+};
+/**
+ * scope存在
+ * ao中不存在，eo中存在;
+ * 混淆的变量在ao中不能存在;
+ **/
+const addmangle = (ast) => map(ast, walk.setWalker({
+  var(cont) {
+    const scope = stack.current();
+    cont[1].forEach((item) => {
+      if (scope.canMangle(item[0])) {
+        scope.addMangle(item[0], mangle.getString());
+      }
+    });
+    return cont;
+  },
+  function(cont) {
+    mangle.reset();
+    stack.push(cont.scope);
+    map(cont[2], walk.getWalker());
+    return prog(cont, stack.pop);
+  },
+  defun(cont) {
+    mangle.reset();
+    stack.push(cont.scope);
+    map(cont[2], walk.getWalker());
+    return prog(cont, stack.pop);
+  },
+}));
+
+const makecode = (ast) => {
+  return map(ast, walk.setWalker({
+    toplevel(cont) {
+      stack.push(cont.scope);
+      return prog(map(cont[1], walk.getWalker()), stack.pop);
+    },
+    var(cont) {
+      const scope = stack.current();
+      let ret = '';
+      if (cont[1].length) {
+        ret = 'var ';
+        cont[1].forEach((item) => {
+          console.log(domap(item[1]));
+          ret += (scope.hasMangle(item[0]) ? scope.mangle[item[0]] : item[0]) + '=' + domap(item[1]) + ',';
+        });
+        ret = ret.slice(0, -1) + ';';
+      }
+      return ret;
+    },
+    num(cont) {
+      return cont[1];
+    },
+    string(cont) {
+      return cont[1];
+    },
+  }));
+};
+
 const result = res.exec();
 Promise.resolve(result)
-  .then((data) => {
-    return map(data, walk.walker);
-  }).then((data) => {
-    walk.setWalker({
-      toplevel(cont) {
-        stack.push(cont.scope);
-        return prog(as(cont[0], map(cont[1], walk.walker)), cont.scope.popstack);
-      },
-      var(cont) {
-        const scope = getstack();
-        cont[1].forEach((item) => {
-          if (hit_obj(scope.eo, item[0])) {
-            console.log(item[0]);
-          } else {
-            console.log('22');
-          }
-        });
-        console.log(cont);
-        return cont;
-      },
-    });
-    map(data, walk.walker);
+  .then(addscope)
+  .then(addao)
+  .then(addmangle)
+  .then(makecode)
+  .then((ast) => {
+    console.log(ast);
   });
 
+console.log(stack.data);
 
-console.log(result);
-console.log(stack);

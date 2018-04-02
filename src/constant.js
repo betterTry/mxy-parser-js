@@ -1,6 +1,6 @@
 import {characters, array_to_hash} from './utils';
 
-export const mangle = 'etnrisouaflchpdvmgybwESxTNCkLAOM_DPHBjFIqRUzWXV$JKQGYZ0516372984';
+export const base64 = 'etnrisouaflchpdvmgybwESxTNCkLAOM_DPHBjFIqRUzWXV$JKQGYZ0516372984';
 
 // https://www.ecma-international.org/ecma-262/5.1/#sec-7.6.1.1
 export const KEY_WORDS = array_to_hash([

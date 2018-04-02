@@ -1,6 +1,5 @@
 import {RE_HEX_NUMBER, RE_OCT_NUMBER, RE_DEC_NUMBER, UNICODE, REGEXP_PARTTERN} from '../constant';
 
-
 export function characters(string) {
   return string.split('');
 }
@@ -11,6 +10,18 @@ export function hit_reg(reg, target) {
 
 export function hit_obj(obj, prop) {
   return Object.prototype.hasOwnProperty.call(obj, prop);
+}
+
+export function hit_parent(scope, item) {
+  if (!scope.parent) {
+    // 说明未声明;
+    return;
+  }
+  if (hit_obj(scope.parent.eo, item)) {
+    return scope.parent.ao[item] = true;
+  } else {
+    return hit_parent(scope.parent, item);
+  }
 }
 
 export function is_digit(ch) {
@@ -68,6 +79,12 @@ export function array_to_hash(arr) {
     ret[arr[i]] = true;
   }
   return ret;
+}
+
+export function curry(func, ...args) {
+  return function(..._args) {
+    return func.apply(this, _args.concat(args));
+  };
 }
 
 export function member(arr, target) {
