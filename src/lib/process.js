@@ -6,11 +6,11 @@
 */
 import parser from './parser';
 import {base64} from '../constant';
-import {hit_obj, hit_parent, prog, curry} from '../utils';
-const res = new parser(`
+import {hit_obj, hit_parent, prog, curry, is_array} from '../utils';
+const text = `
   var g = 1, asda = 2, asdas = 3, asjajsjasj = 4;
   a = 1;
-  function c(){
+  function c(a, b){
     function d() {
       console.log(c);
       var a = 1;
@@ -20,10 +20,9 @@ const res = new parser(`
   do{
     var a = 1, b = 2;
     console.log(2);
+    break;
   } while(a = 1);
-  while(a, b) {
 
-  };
   try {
 
   } catch(a) {
@@ -39,7 +38,9 @@ const res = new parser(`
       break;
     case b:
       console.log(b);
-  }`);
+  }`;
+console.log(text);
+const res = new parser(text);
 
 const stack = {
   data: [],
@@ -80,15 +81,15 @@ const walk = {
   walker: {
     toplevel(cont) {
       stack.push(cont.scope || new Scope());
-      map(cont[1], walk.getWalker());
+      domap(cont[1]);
       return prog(cont, stack.pop);
     },
     do(cont) {
-      map(cont[1], walk.getWalker());
+      domap(cont[1]);
       return cont;
     },
     block(cont) {
-      map(cont[1], walk.getWalker());
+      domap(cont[1]);
       return cont;
     },
     var(cont) {
@@ -102,32 +103,35 @@ const walk = {
       return cont;
     },
     while(cont) {
-      map(cont[2], walk.getWalker());
+      domap(cont[2]);
       return cont;
     },
     try(cont) {
-      map(cont[1], walk.getWalker());
-      map(cont[3], walk.getWalker());
-      map(cont[4], walk.getWalker());
+      domap(cont[1]);
+      domap(cont[3]);
+      domap(cont[4]);
       return cont;
     },
     new(cont) {
-      if (cont[1][0] === 'function') map(cont[1], walk.getWalker());
+      if (cont[1][0] === 'function') domap(cont[1]);
       return cont;
     },
     function(cont) {
       stack.push(cont.scope || new Scope());
-      map(cont[2], walk.getWalker());
+      domap(cont[2]);
       return prog(cont, stack.pop);
     },
     defun(cont) {
       const scope = cont.scope || new Scope();
       stack.push(scope);
-      map(cont[2], walk.getWalker());
+      domap(cont[2]);
       return prog(cont, stack.pop);
     },
     switch(cont) {
-      map(cont[2], walk.getWalker());
+      domap(cont[2]);
+      return cont;
+    },
+    seq(cont) {
       return cont;
     },
     case(cont) {
@@ -143,12 +147,12 @@ const walk = {
       return cont;
     },
     binary(cont) {
-      map(cont[2], walk.getWalker());
-      map(cont[3], walk.getWalker());
+      domap(cont[2]);
+      domap(cont[3]);
       return cont;
     },
     stat(cont) {
-      map(cont[1], walk.getWalker());
+      domap(cont[1]);
       return cont;
     },
   },
@@ -174,21 +178,20 @@ const map = function(target, handle) {
   }
 };
 
-const domap = curry(map, walk.newWalker || walk.walker);
-console.log(domap);
+const domap = curry((...args) => map.apply(null, args.concat([args.splice(-1)[0]()])), walk.getWalker.bind(walk));
 
 const addscope = (ast) => map(ast, walk.setWalker({
   toplevel(cont) {
     const scope = new Scope();
     stack.push(cont.scope = scope);
-    map(cont[1], walk.getWalker());
+    domap(cont[1]);
     return prog(cont, stack.pop);
   },
   defun(cont) {
     const scope = new Scope();
     const par = stack.current();
     stack.push(scope);
-    map(cont[2], walk.getWalker());
+    domap(cont[2]);
 
     par.eo[cont[1][1]] = cont[2];
     par.children.push(cont.scope = scope);
@@ -203,7 +206,7 @@ const addscope = (ast) => map(ast, walk.setWalker({
     const scope = new Scope();
     const par = stack.current();
     stack.push(scope);
-    map(cont[2], walk.getWalker());
+    domap(cont[2]);
 
     par.children.push(cont.scope = scope);
     scope.parent = par;
@@ -217,7 +220,7 @@ const addscope = (ast) => map(ast, walk.setWalker({
 const addao = (ast) => map(ast, walk.setWalker({
   toplevel(cont) {
     stack.push(cont.scope);
-    map(cont[1], walk.getWalker());
+    domap(cont[1]);
     return prog(cont, stack.pop);
   },
   name(cont) {
@@ -268,22 +271,24 @@ const addmangle = (ast) => map(ast, walk.setWalker({
   function(cont) {
     mangle.reset();
     stack.push(cont.scope);
-    map(cont[2], walk.getWalker());
+    domap(cont[2]);
     return prog(cont, stack.pop);
   },
   defun(cont) {
     mangle.reset();
     stack.push(cont.scope);
-    map(cont[2], walk.getWalker());
+    domap(cont[2]);
     return prog(cont, stack.pop);
   },
 }));
+
+const split = (data) => is_array(data) ? data.join('') : data;
 
 const makecode = (ast) => {
   return map(ast, walk.setWalker({
     toplevel(cont) {
       stack.push(cont.scope);
-      return prog(map(cont[1], walk.getWalker()), stack.pop);
+      return split(prog(domap(cont[1]), stack.pop));
     },
     var(cont) {
       const scope = stack.current();
@@ -291,18 +296,76 @@ const makecode = (ast) => {
       if (cont[1].length) {
         ret = 'var ';
         cont[1].forEach((item) => {
-          console.log(domap(item[1]));
           ret += (scope.hasMangle(item[0]) ? scope.mangle[item[0]] : item[0]) + '=' + domap(item[1]) + ',';
         });
         ret = ret.slice(0, -1) + ';';
       }
       return ret;
     },
+    stat(cont) {
+      return split(domap(cont[1]));
+    },
+    name(cont) {
+      const scope = stack.current();
+      return scope.hasMangle(cont[1]) ? scope.mangle[cont[1]] : cont[1];
+    },
+    defun(cont) {
+      stack.push(cont.scope);
+      const ret = 'function ' + domap(cont[1]) + '(' + domap(cont[3]).join(',') + ')' + domap(cont[2]);
+      return prog(ret, stack.pop);
+    },
+    block(cont) {
+      return '{' + split(domap(cont[1])) + '}';
+    },
+    call(cont) {
+      return domap(cont[1]) + '(' + domap(cont[2]) + ')';
+    },
+    dot(cont) {
+      return domap(cont[1]) + '.' + cont[2];
+    },
+    binary(cont) {
+      return domap(cont[2]) + cont[1] + domap(cont[3]) + ';';
+    },
+    do(cont) {
+      return 'do' + domap(cont[1]) + 'while' + domap(cont[2]);
+    },
+    while(cont) {
+      return 'while' + domap(cont[1]) + domap(cont[2]);
+    },
+    try(cont) {
+      return 'try' + domap(cont[1]) + 'catch(' + cont[2] + ')' + domap(cont[3]) + (cont[3] ? 'finally' + domap(cont[4]) : '');
+    },
+    new(cont) {
+      return 'new ' + domap(cont[1]) + (cont[2].length ? `(${domap(cont[2])})` : '');
+    },
+    function(cont) {
+      stack.push(cont.scope);
+      const ret = 'function ' + domap(cont[1]) + `(${domap(cont[3])})` + domap(cont[2]);
+      return prog(ret, stack.pop);
+    },
+    parentheses(cont) {
+      return '(' + domap(cont[1]) + ')';
+    },
+    switch(cont) {
+      return 'switch' + domap(cont[1]) + '{' + split(domap(cont[2])) + '}';
+    },
+    case(cont) {
+      return 'case ' + domap(cont[1]) + ':' + split(domap(cont[2]));
+    },
+    seq(cont) {
+      return cont[1].join(',');
+    },
+    break(cont) {
+      return cont[1] ? 'break ' + cont[1] : 'break;';
+    },
     num(cont) {
       return cont[1];
     },
     string(cont) {
       return cont[1];
+    },
+    semicolon() {
+      return '';
     },
   }));
 };

@@ -360,13 +360,16 @@ class parser {
   }
 
   do_() {
-    const body = this.statement();
+    return this.loop(function() {
+      const body = this.statement();
 
-    this.expect_token('keyword', 'while');
-    this.expect('(');
-    const cond = this.parentheses_();
-    return as('do', body, cond);
+      this.expect_token('keyword', 'while');
+      this.expect('(');
+      const cond = this.parentheses_();
+      return as('do', body, cond);
+    });
   }
+    
 
   if_() {
     this.expect('(');

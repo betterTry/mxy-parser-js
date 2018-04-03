@@ -50,9 +50,9 @@ export function is_identifier_char(ch) {
       || ch == '\u200d'; // zero-width joiner <ZWJ> (in my ECMA-262 PDF, this is also 200c)
 }
 
-// export function is_assignable(expr) {
-//
-// }
+export function is_array(data) {
+  return data instanceof Array;
+}
 
 export function is_regexp_pattern(str) {
   for (let i = 0; i < str.length; i++) {
