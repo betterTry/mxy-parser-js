@@ -70,7 +70,7 @@ class parser {
   }
 
   prog(ret) {
-    if (ret instanceof Function) ret = ret();
+    if (ret instanceof Function) ret = ret.call(this);
     for (let i = 1; i < arguments.length; i++) {
       arguments[i].bind(this)();
     }
@@ -319,6 +319,10 @@ class parser {
     return this.prog(as('block', ret), this.next);
   }
 
+  array_() {
+    return as('array', this.expr_list(']', true));
+  }
+
   braces_() {
     const ret = this.block_();
     if (ret[1].length) {
@@ -437,22 +441,22 @@ class parser {
     return val;
   }
 
-  expr_ops(left) {
+  expr_ops(left, no_in) {
     // 应该先看一元操作符;
     left = left || this.maybe_unary();
     let op = this.is('operator') ? this.current.value : null;
+    if (op == 'in' && no_in || !precedence[op]) op = null;
     if (op !== null) {
-      precedence[op];
       this.next();
       // 此处不需要从maybe_assign处来算, 是因为优先级的问题;
       var right = this.maybe_unary();
-      return this.expr_ops(as('binary', op, left, right)); // 连等;
+      return this.expr_ops(as('binary', op, left, right), no_in); // 连等;
     }
     return left;
   }
 
-  maybe_conditional() {
-    const expr = this.expr_ops();
+  maybe_conditional(no_in) {
+    const expr = this.expr_ops(null, no_in);
     if (this.is('operator', '?')) {
       this.next();
       const yes = this.expression(false);
@@ -463,33 +467,33 @@ class parser {
   }
 
   is_assignable(expr) {
-    switch(expr.type) {
+    switch(expr[0]) {
       case 'dot':
       case 'sub':
         return true;
       case 'atom':
-        if (expr.value == 'undefined') return true;
+        if (expr[1] == 'undefined') return true;
       case 'name':
-        if (expr.value !== 'this') return true;
+        if (expr[1] !== 'this') return true;
       default:
         return false;
     }
   }
 
-  maybe_assign(commas) {
-    let left = this.maybe_conditional();
+  maybe_assign(no_in) {
+    let left = this.maybe_conditional(no_in);
     if (this.is('operator') || hit_obj(ASSIGN_OPEATORS, this.current.value)) {
       if (this.is_assignable(left)) {
         this.next();
-        return as('assign', this.current.value, left, this.maybe_assign(commas));
+        return as('assign', this.current.value, left, this.maybe_assign(no_in));
       }
     }
     return left;
   }
 
   // left-hand-site expression;
-  expression(commas = true) {
-    const expr = this.maybe_assign(commas);
+  expression(commas = true, no_in) {
+    const expr = this.maybe_assign(commas, no_in);
     if (commas && this.is('punc', ',')) {
       this.next();
       return as('seq', expr, this.expression(true));

@@ -8,37 +8,228 @@ import parser from './parser';
 import {base64} from '../constant';
 import {hit_obj, hit_parent, prog, curry, is_array} from '../utils';
 const text = `
-  var g = 1, asda = 2, asdas = 3, asjajsjasj = 4;
-  a = 1;
-  function c(a, b){
-    function d() {
-      console.log(c);
-      var a = 1;
-      g = 2;
-    }
-  }
-  do{
-    var a = 1, b = 2;
-    console.log(2);
-    break;
-  } while(a = 1);
+  var jsp = require("./parse-js"),
+    curry = jsp.curry,
+    slice = jsp.slice,
+    member = jsp.member,
+    is_identifier_char = jsp.is_identifier_char,
+    PRECEDENCE = jsp.PRECEDENCE,
+    OPERATORS = jsp.OPERATORS;
 
-  try {
+/* -----[ helper for AST traversal ]----- */
 
-  } catch(a) {
-    console.log(2);
-  } finally {
+function ast_walker() {
+    function _vardefs(defs) {
+        return [ this[0], MAP(defs, function(def){
+            var a = [ def[0] ];
+            if (def.length > 1)
+                a[1] = walk(def[1]);
+            return a;
+        }) ];
+    };
+    function _block(statements) {
+        var out = [ this[0] ]; // 类型呢;
+        if (statements != null)
+            out.push(MAP(statements, walk)); // MAP跑;
+        return out;
+    };
+    var walkers = {
+        "string": function(str) {
+            return [ this[0], str ];
+        },
+        "num": function(num) {
+            return [ this[0], num ];
+        },
+        "name": function(name) {
+            return [ this[0], name ];
+        },
+        "toplevel": function(statements) {
+            return [ this[0], MAP(statements, walk) ]; // 遍历去walk;
+        },
+        "block": _block,
+        "splice": _block,
+        "var": _vardefs,
+        "const": _vardefs,
+        "try": function(t, c, f) {
+            return [
+                this[0],
+                MAP(t, walk),
+                c != null ? [ c[0], MAP(c[1], walk) ] : null,
+                f != null ? MAP(f, walk) : null
+            ];
+        },
+        "throw": function(expr) {
+            return [ this[0], walk(expr) ];
+        },
+        "new": function(ctor, args) {
+            return [ this[0], walk(ctor), MAP(args, walk) ];
+        },
+        "switch": function(expr, body) {
+            return [ this[0], walk(expr), MAP(body, function(branch){
+                return [ branch[0] ? walk(branch[0]) : null,
+                         MAP(branch[1], walk) ];
+            }) ];
+        },
+        "break": function(label) {
+            return [ this[0], label ];
+        },
+        "continue": function(label) {
+            return [ this[0], label ];
+        },
+        "conditional": function(cond, t, e) {
+            return [ this[0], walk(cond), walk(t), walk(e) ];
+        },
+        "assign": function(op, lvalue, rvalue) {
+            return [ this[0], op, walk(lvalue), walk(rvalue) ];
+        },
+        "dot": function(expr) {
+            return [ this[0], walk(expr) ].concat(slice(arguments, 1));
+        },
+        "call": function(expr, args) {
+            return [ this[0], walk(expr), MAP(args, walk) ];
+        },
+        "function": function(name, args, body) {
+            return [ this[0], name, args.slice(), MAP(body, walk) ];
+        },
+        "debugger": function() {
+            return [ this[0] ];
+        },
+        "defun": function(name, args, body) {
+            return [ this[0], name, args.slice(), MAP(body, walk) ];
+        },
+        "if": function(conditional, t, e) {
+            return [ this[0], walk(conditional), walk(t), walk(e) ];
+        },
+        "for": function(init, cond, step, block) {
+            return [ this[0], walk(init), walk(cond), walk(step), walk(block) ];
+        },
+        "for-in": function(vvar, key, hash, block) {
+            return [ this[0], walk(vvar), walk(key), walk(hash), walk(block) ];
+        },
+        "while": function(cond, block) {
+            return [ this[0], walk(cond), walk(block) ];
+        },
+        "do": function(cond, block) {
+            return [ this[0], walk(cond), walk(block) ];
+        },
+        "return": function(expr) {
+            return [ this[0], walk(expr) ];
+        },
+        "binary": function(op, left, right) {
+            return [ this[0], op, walk(left), walk(right) ];
+        },
+        "unary-prefix": function(op, expr) {
+            return [ this[0], op, walk(expr) ];
+        },
+        "unary-postfix": function(op, expr) {
+            return [ this[0], op, walk(expr) ];
+        },
+        "sub": function(expr, subscript) {
+            return [ this[0], walk(expr), walk(subscript) ];
+        },
+        "object": function(props) {
+            return [ this[0], MAP(props, function(p){
+                return p.length == 2
+                    ? [ p[0], walk(p[1]) ]
+                    : [ p[0], walk(p[1]), p[2] ]; // get/set-ter
+            }) ];
+        },
+        "regexp": function(rx, mods) {
+            return [ this[0], rx, mods ];
+        },
+        "array": function(elements) {
+            return [ this[0], MAP(elements, walk) ];
+        },
+        "stat": function(stat) {
+            return [ this[0], walk(stat) ];
+        },
+        "seq": function() {
+            return [ this[0] ].concat(MAP(slice(arguments), walk));
+        },
+        "label": function(name, block) {
+            return [ this[0], name, walk(block) ];
+        },
+        "with": function(expr, block) {
+            return [ this[0], walk(expr), walk(block) ];
+        },
+        "atom": function(name) {
+            return [ this[0], name ];
+        },
+        "directive": function(dir) {
+            return [ this[0], dir ];
+        }
+    };
 
-  }
-  new function a(b, c) {}(1,2);
-  new a(b);
-  switch(a) {
-    case a:
-      console.log(2);
-      break;
-    case b:
-      console.log(b);
-  }`;
+    var user = {};
+    var stack = []; // ast遍历时的堆栈信息;
+    /**
+     * 有可能加入用户定义的遍历函数;
+     */
+    function walk(ast) {
+        if (ast == null)
+            return null;
+        try {
+            stack.push(ast);
+            var type = ast[0];
+            var gen = user[type];
+            if (gen) {
+                var ret = gen.apply(ast, ast.slice(1)); // 在这里会将上下文对象变为ast;
+                if (ret != null)
+                    return ret;
+            }
+            gen = walkers[type]; // 默认的遍历器进行遍历;
+            return gen.apply(ast, ast.slice(1));
+        } finally {
+            stack.pop();
+        }
+    };
+
+
+    /**
+     * 原生的walker进行遍历;
+     */
+    function dive(ast) {
+        if (ast == null)
+            return null;
+        try {
+            stack.push(ast);
+            return walkers[ast[0]].apply(ast, ast.slice(1));
+        } finally {
+            stack.pop();
+        }
+    };
+
+    /**
+     * @see 存起来walkers中各个属性;
+     * @return {ret 遍历后的新语法树}
+     */
+    function with_walkers(walkers, cont){
+        var save = {}, i;
+        for (i in walkers) if (HOP(walkers, i)) {
+            save[i] = user[i]; // 缓存user;
+            user[i] = walkers[i]; // 新的遍历器覆盖;
+        }
+        var ret = cont(); // 执行的函数; 一般在里面会调用walk(ast)进行遍历;
+        // 恢复原来的状态;
+        for (i in save) if (HOP(save, i)) {
+            if (!save[i]) delete user[i]; // 如果!原有值, 删除现在值;
+            else user[i] = save[i]; // 如果有原有值, 还原值;
+        }
+        return ret; // 一般是遍历后的ast语法树;
+    };
+
+    return {
+        walk: walk,
+        dive: dive,
+        with_walkers: with_walkers,
+        parent: function() {
+            return stack[stack.length - 2]; // 最后一个是当前的node, 返回倒数第二个; // 在walker中循环调用walk stack会持续增多;
+        },
+        stack: function() { // 剩余的;
+            return stack;
+        }
+    };
+};`;
 console.log(text);
 const res = new parser(text);
 
@@ -287,6 +478,7 @@ const split = (data) => is_array(data) ? data.join('') : data;
 const makecode = (ast) => {
   return map(ast, walk.setWalker({
     toplevel(cont) {
+      console.log(cont);
       stack.push(cont.scope);
       return split(prog(domap(cont[1]), stack.pop));
     },
@@ -303,7 +495,7 @@ const makecode = (ast) => {
       return ret;
     },
     stat(cont) {
-      return split(domap(cont[1]));
+      return split(domap(cont[1])) + ';';
     },
     name(cont) {
       const scope = stack.current();
@@ -324,7 +516,7 @@ const makecode = (ast) => {
       return domap(cont[1]) + '.' + cont[2];
     },
     binary(cont) {
-      return domap(cont[2]) + cont[1] + domap(cont[3]) + ';';
+      return domap(cont[2]) + cont[1] + domap(cont[3]);
     },
     do(cont) {
       return 'do' + domap(cont[1]) + 'while' + domap(cont[2]);
@@ -376,8 +568,8 @@ Promise.resolve(result)
   .then(addao)
   .then(addmangle)
   .then(makecode)
-  .then((ast) => {
-    console.log(ast);
+  .then((result) => {
+    console.log(result);
   });
 
 console.log(stack.data);

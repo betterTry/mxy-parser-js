@@ -125,7 +125,7 @@ export function last(arr) {
 }
 
 
-export const precedence = !function () {
+export const precedence = (function () {
   // 赋值符; -2
   // ?:操作符 -1
   const ops = [
@@ -146,4 +146,4 @@ export const precedence = !function () {
     }
   }
   return ret;
-}();
+})();

@@ -149,6 +149,7 @@ export const OPERATORS = array_to_hash([
 ]);
 
 export const ASSIGN_OPEATORS = array_to_hash([
+  '=',
   '+=',
   '-=',
   '/=',

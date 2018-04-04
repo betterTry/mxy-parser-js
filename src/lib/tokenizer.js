@@ -209,7 +209,7 @@ class tokenizer {
       this.S.pos = this.S.text.length;
     } else {
       ret = this.S.text.substring(this.S.pos, pos);
-      this.S.pos += pos;
+      this.S.pos = pos;
     }
     return this.token('comment1', ret, true);
 
@@ -312,7 +312,7 @@ class tokenizer {
   }
 
   find(target, must) {
-    const pos = this.S.text.indexof(target, this.S.pos);
+    const pos = this.S.text.indexOf(target, this.S.pos);
     if (must && pos == -1) throw this.EX_EOF;
     return pos;
   }
@@ -347,15 +347,17 @@ class tokenizer {
     } else if (ch == '/'){
       this.S.comments_before = this.read_line_comment();
       this.S.regex_allowed = regex_allowed;
-      return this.next_token();
+      var c = this.next_token();
+      return c;
     }
     return this.S.regex_allowed ? this.read_regexp() : this.read_operator('/');
   }
 
-  next_token() {
+  next_token(debug) {
     this.skip_whitespace();
     this.start_token();
     const ch = this.peek();
+    if (debug) console.log(ch);
     if (!ch) return this.token('eof');
     if (is_digit(ch)) return this.read_num();
     if (ch == '"' || ch == "'") return this.read_string();
