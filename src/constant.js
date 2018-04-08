@@ -28,10 +28,9 @@ export const KEY_WORDS = array_to_hash([
   'instanceof',
   'void',
   'default',
-  'in',
   'delete',
   'finally',
-]);
+]); // in不写到keyword中;
 
 export const RESERVED_WORDS = array_to_hash([
   'abstract',

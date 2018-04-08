@@ -345,7 +345,7 @@ class tokenizer {
       this.S.regex_allowed = regex_allowed;
       return this.next_token();
     } else if (ch == '/'){
-      this.S.comments_before = this.read_line_comment();
+      this.S.comments_before.push(this.read_line_comment());
       this.S.regex_allowed = regex_allowed;
       var c = this.next_token();
       return c;

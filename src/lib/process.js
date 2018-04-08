@@ -277,6 +277,7 @@ const walk = {
     },
     do(cont) {
       domap(cont[1]);
+      domap(cont[2]);
       return cont;
     },
     block(cont) {
@@ -286,7 +287,7 @@ const walk = {
     var(cont) {
       const scope = stack.current();
       cont[1].forEach((item) => {
-        scope.eo[item[0]] = item[1];
+        scope.eo[item[0]] = domap(item[1]);
       });
       return cont;
     },
@@ -294,6 +295,7 @@ const walk = {
       return cont;
     },
     while(cont) {
+      domap(cont[1]);
       domap(cont[2]);
       return cont;
     },
@@ -319,22 +321,62 @@ const walk = {
       return prog(cont, stack.pop);
     },
     switch(cont) {
+      domap(cont[1]);
       domap(cont[2]);
       return cont;
     },
+    object(cont) {
+      cont[1].forEach((item) => {
+        domap(item[1]);
+      });
+      return cont;
+    },
     seq(cont) {
+      cont.slice(1).forEach((item) => {
+        domap(item);
+      });
+      return cont;
+    },
+    sub(cont) {
+      domap(cont[1]);
+      domap(cont[2]);
       return cont;
     },
     case(cont) {
+      domap(cont[1]);
+      domap(cont[2]);
+      return cont;
+    },
+    conditional(cont) {
+      domap(cont[1]);
+      domap(cont[2]);
+      domap(cont[3]);
       return cont;
     },
     call(cont) {
+      domap(cont[1]);
+      domap(cont[2]);
       return cont;
     },
     dot(cont) {
+      domap(cont[1]);
+      return cont;
+    },
+    for_in(cont) {
+      domap(cont[3]);
+      return cont;
+    },
+    array(cont) {
+      domap(cont[1]);
       return cont;
     },
     name(cont) {
+      return cont;
+    },
+    if(cont) {
+      domap(cont[1]);
+      domap(cont[2]);
+      domap(cont[3]);
       return cont;
     },
     binary(cont) {
@@ -342,8 +384,40 @@ const walk = {
       domap(cont[3]);
       return cont;
     },
+    parentheses(cont) {
+      domap(cont[1]);
+      return cont;
+    },
     stat(cont) {
       domap(cont[1]);
+      return cont;
+    },
+    debug(cont) {
+      return cont;
+    },
+    return(cont) {
+      return domap(cont[1]);
+    },
+    assign(cont) {
+      domap(cont[1]);
+      domap(cont[2]);
+      return cont;
+    },
+    string(cont) {
+      return cont;
+    },
+    break(cont) {
+      return cont;
+    },
+    atom(cont) {
+      return cont;
+    },
+    'unary-prefix'(cont) {
+      domap(cont[2]);
+      return cont;
+    },
+    'unary-postfix'(cont) {
+      domap(cont[2]);
       return cont;
     },
   },
@@ -356,6 +430,7 @@ const walk = {
 };
 
 const map = function(target, handle) {
+  if (!target) return '';
   if (target[0] instanceof Array) {
     return target.map((item) => {
       return map(item, handle);
@@ -390,7 +465,7 @@ const addscope = (ast) => map(ast, walk.setWalker({
     cont[3].forEach((item) => {
       scope.eo[item[1]] = undefined;
     });
-    
+
     return prog(cont, stack.pop);
   },
   function(cont) {
@@ -478,7 +553,6 @@ const split = (data) => is_array(data) ? data.join('') : data;
 const makecode = (ast) => {
   return map(ast, walk.setWalker({
     toplevel(cont) {
-      console.log(cont);
       stack.push(cont.scope);
       return split(prog(domap(cont[1]), stack.pop));
     },
@@ -495,7 +569,7 @@ const makecode = (ast) => {
       return ret;
     },
     stat(cont) {
-      return split(domap(cont[1])) + ';';
+      return domap(cont[1]) + ';';
     },
     name(cont) {
       const scope = stack.current();
@@ -525,18 +599,41 @@ const makecode = (ast) => {
       return 'while' + domap(cont[1]) + domap(cont[2]);
     },
     try(cont) {
-      return 'try' + domap(cont[1]) + 'catch(' + cont[2] + ')' + domap(cont[3]) + (cont[3] ? 'finally' + domap(cont[4]) : '');
+      return 'try' + domap(cont[1]) + (cont[2] ? 'catch(' + cont[2] + ')' + domap(cont[3]) : '') + (cont[3] ? 'finally' + domap(cont[4]) : '');
     },
     new(cont) {
       return 'new ' + domap(cont[1]) + (cont[2].length ? `(${domap(cont[2])})` : '');
     },
-    function(cont) {
+    function(cont) { // 在这里判断下是不是到了括号，然后加上分号分割; 其实可以在block那里去判断;判断之前得类型;
       stack.push(cont.scope);
-      const ret = 'function ' + domap(cont[1]) + `(${domap(cont[3])})` + domap(cont[2]);
+      const ret = 'function ' + (cont[1] ? domap(cont[1]) : '') + `(${domap(cont[3])})` + domap(cont[2]);
       return prog(ret, stack.pop);
+    },
+    return(cont) {
+      return 'return ' + domap(cont[1]) + ';';
+    },
+    for_in(cont) {
+      return 'for(' + domap(cont[1]) + ' in ' + cont[2] + ')' + domap(cont[3]);
     },
     parentheses(cont) {
       return '(' + domap(cont[1]) + ')';
+    },
+    object(cont) {
+      return '{' + cont[1].map((item) => {
+        return `"${item[0]}":` + domap(item[1]);
+      }).join(',') + '}';
+    },
+    array(cont) {
+      return '[' + domap(cont[1]) + ']';
+    },
+    if(cont) {
+      return 'if' + domap(cont[1]) + domap(cont[2]) + (cont[3] ? 'else ' + domap(cont[3]) : '');
+    },
+    conditional(cont) {
+      return domap(cont[1]) + '?' + domap(cont[2]) + ':' + domap(cont[3]);
+    },
+    sub(cont) {
+      return domap(cont[1]) + '[' + domap(cont[2]) + ']';
     },
     switch(cont) {
       return 'switch' + domap(cont[1]) + '{' + split(domap(cont[2])) + '}';
@@ -545,7 +642,13 @@ const makecode = (ast) => {
       return 'case ' + domap(cont[1]) + ':' + split(domap(cont[2]));
     },
     seq(cont) {
-      return cont[1].join(',');
+      const ret = cont.slice(1).map((item) => {
+        return domap(item);
+      });
+      return ret.join(',');
+    },
+    assign(cont) {
+      return domap(cont[2]) + cont[1] + domap(cont[3]);
     },
     break(cont) {
       return cont[1] ? 'break ' + cont[1] : 'break;';
@@ -554,10 +657,19 @@ const makecode = (ast) => {
       return cont[1];
     },
     string(cont) {
+      return '"' + cont[1] + '"';
+    },
+    atom(cont) {
       return cont[1];
     },
     semicolon() {
       return '';
+    },
+    'unary-prefix'(cont) {
+      return cont[1] + domap(cont[2]);
+    },
+    'unary-postfix'(cont) {
+      return domap(cont[2]) + cont[1];
     },
   }));
 };
@@ -569,8 +681,6 @@ Promise.resolve(result)
   .then(addmangle)
   .then(makecode)
   .then((result) => {
+    console.log(stack.data);
     console.log(result);
   });
-
-console.log(stack.data);
-

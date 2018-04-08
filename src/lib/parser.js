@@ -115,6 +115,14 @@ class parser {
     }
   }
 
+  for_in(ret) {
+    this.next();
+    const name = this.expect_token('name').value;
+    this.expect(')');
+    const body = this.statement();
+    return as('for_in', ret, name, body);
+  }
+
   regular_for(init) {
     this.expect(';');
     const test = this.is('punc', ';') ? null : this.expression();
@@ -130,7 +138,7 @@ class parser {
     if (!this.is('punc', ';')) {
       ret = this.is('keyword', 'var')
         ? (this.next(), this.var_())
-        : (this.expression());
+        : (this.expression(true, true));
       if (this.is('operator', 'in')) {
         if (ret[0] == 'var' && ret[1].length > 1) {
           this.throw_error('Only one variable declaration allowed in for..in loop');
@@ -294,7 +302,7 @@ class parser {
     if (this.is('punc', '[')) {
       this.next();
       if (this.is('punc', ']')) this.throw_error('Unexpected token ]');
-      else return this.subscript(as('sub', expr, this.expr_list(']', false, true)));
+      else return this.subscript(as('sub', expr, this.expr_list(']', false, true)), allow_call);
     }
     return expr;
   }
@@ -373,7 +381,7 @@ class parser {
       return as('do', body, cond);
     });
   }
-    
+
 
   if_() {
     this.expect('(');
@@ -383,7 +391,7 @@ class parser {
     if (this.is('keyword', 'else')) {
       ebody = this.statement();
     }
-    return as('if', cond[1], body, ebody);
+    return as('if', cond, body, ebody);
   }
 
   parentheses_(commas) {
@@ -393,7 +401,7 @@ class parser {
     return as('parentheses', expr);
   }
 
-  expr_simple_expr(allow_call) {
+  expr_simple_expr(allow_call, no_in) {
     if (this.is('operator', 'new')) {
       this.next();
       return this.new_();
@@ -419,7 +427,7 @@ class parser {
       const atom = this.current.type == 'regexp'
         ? as('regexp', this.current.value[0], this.current.value[1])
         : as(this.current.type, this.current.value);
-      return this.subscript(this.prog(atom, this.next), allow_call);
+      return this.subscript(this.prog(atom, this.next), allow_call, no_in);
     }
     this.throw_error(`Unexpected token ${this.current.value}`);
   }
@@ -450,7 +458,7 @@ class parser {
       this.next();
       // 此处不需要从maybe_assign处来算, 是因为优先级的问题;
       var right = this.maybe_unary();
-      return this.expr_ops(as('binary', op, left, right), no_in); // 连等;
+      return this.expr_ops(as('binary', op, left, right)); // 连等;
     }
     return left;
   }
@@ -459,9 +467,9 @@ class parser {
     const expr = this.expr_ops(null, no_in);
     if (this.is('operator', '?')) {
       this.next();
-      const yes = this.expression(false);
+      const yes = this.expression(false, no_in);
       this.expect(':');
-      return as('conditional', expr, yes, this.expression(false));
+      return as('conditional', expr, yes, this.expression(false, no_in));
     }
     return expr;
   }
@@ -482,10 +490,11 @@ class parser {
 
   maybe_assign(no_in) {
     let left = this.maybe_conditional(no_in);
-    if (this.is('operator') || hit_obj(ASSIGN_OPEATORS, this.current.value)) {
+    let op = this.current.value;
+    if (this.is('operator') && hit_obj(ASSIGN_OPEATORS, op)) {
       if (this.is_assignable(left)) {
         this.next();
-        return as('assign', this.current.value, left, this.maybe_assign(no_in));
+        return as('assign', op, left, this.maybe_assign(no_in));
       }
     }
     return left;
@@ -496,7 +505,7 @@ class parser {
     const expr = this.maybe_assign(commas, no_in);
     if (commas && this.is('punc', ',')) {
       this.next();
-      return as('seq', expr, this.expression(true));
+      return as('seq', expr, this.expression(commas, no_in));
     }
     return expr;
   }
