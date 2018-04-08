@@ -6,7 +6,7 @@
 */
 import parser from './parser';
 import {base64} from '../constant';
-import {hit_obj, hit_parent, prog, curry, is_array} from '../utils';
+import {hit_obj, hit_parent, prog, curry, is_array, last} from '../utils';
 const text = `
   var jsp = require("./parse-js"),
     curry = jsp.curry,
@@ -37,7 +37,7 @@ function ast_walker() {
         "string": function(str) {
             return [ this[0], str ];
         },
-        "num": function(num) {
+        "\u2008": function(num) {
             return [ this[0], num ];
         },
         "name": function(name) {
@@ -236,7 +236,7 @@ const res = new parser(text);
 const stack = {
   data: [],
   current() {
-    return stack.data[stack.data.length - 1];
+    return last(stack.data);
   },
   pop() {
     stack.data.pop();
@@ -256,15 +256,31 @@ class Scope {
     this.eo = {};
     this.ao = {};
     this.mangle = {};
+    this.num = 0;
   }
   canMangle(name) {
-    return !this.hasMangle() && !hit_obj(this.ao, name) && hit_obj(this.eo, name);
+    return !this.hasMangle(name) && hit_obj(this.ao, name) && hit_obj(this.eo, name);
   }
   addMangle(old, n) {
     this.mangle[old] = n;
   }
   hasMangle(name) {
     return hit_obj(this.mangle, name);
+  }
+  getMangle() {
+    let base = 54;
+    let ret = '';
+    let num = this.num;
+    do {
+      ret += base64.charAt(num % base);
+      num = Math.floor(num / base);
+      base = 64;
+    } while(num > 0);
+    this.num++;
+    return ret;
+  }
+  addEo(name) {
+    this.eo[name] = undefined;
   }
 }
 
@@ -287,7 +303,8 @@ const walk = {
     var(cont) {
       const scope = stack.current();
       cont[1].forEach((item) => {
-        scope.eo[item[0]] = domap(item[1]);
+        domap(item[1]);
+        scope.eo[item[0]] = undefined;
       });
       return cont;
     },
@@ -311,13 +328,16 @@ const walk = {
     },
     function(cont) {
       stack.push(cont.scope || new Scope());
+      domap(cont[1]);
       domap(cont[2]);
+      domap(cont[3]);
       return prog(cont, stack.pop);
     },
     defun(cont) {
-      const scope = cont.scope || new Scope();
-      stack.push(scope);
+      stack.push(cont.scope || new Scope());
+      domap(cont[1]);
       domap(cont[2]);
+      domap(cont[3]);
       return prog(cont, stack.pop);
     },
     switch(cont) {
@@ -462,8 +482,10 @@ const addscope = (ast) => map(ast, walk.setWalker({
     par.eo[cont[1][1]] = cont[2];
     par.children.push(cont.scope = scope);
     scope.parent = par;
+
+    scope.addEo(cont[1][1]);
     cont[3].forEach((item) => {
-      scope.eo[item[1]] = undefined;
+      scope.addEo(item[1]);
     });
 
     return prog(cont, stack.pop);
@@ -476,8 +498,10 @@ const addscope = (ast) => map(ast, walk.setWalker({
 
     par.children.push(cont.scope = scope);
     scope.parent = par;
+
+    cont[1] && scope.addEo(cont[1][1]);
     cont[3].forEach((item) => {
-      scope.eo[item[1]] = undefined;
+      scope.addEo(item[1]);
     });
 
     return prog(cont, stack.pop);
@@ -500,25 +524,6 @@ const addao = (ast) => map(ast, walk.setWalker({
   },
 }));
 
-const mangle = {
-  base64,
-  num: 0,
-  getString(not) {
-    let base = 54;
-    let ret = '';
-    let num;
-    do {
-      ret += this.base64.charAt(this.num % base);
-      num = Math.floor(num / base64);
-      base = 64;
-    } while(num > 0 || ret == not && ++this.num);
-    this.num++;
-    return ret;
-  },
-  reset() {
-    this.num = 0;
-  },
-};
 /**
  * scope存在
  * ao中不存在，eo中存在;
@@ -527,22 +532,33 @@ const mangle = {
 const addmangle = (ast) => map(ast, walk.setWalker({
   var(cont) {
     const scope = stack.current();
-    cont[1].forEach((item) => {
+    scope.parent && cont[1].forEach((item) => {
       if (scope.canMangle(item[0])) {
-        scope.addMangle(item[0], mangle.getString());
+        scope.addMangle(item[0], scope.getMangle());
       }
+      domap(item[1]);
     });
+
+    return cont;
+  },
+  name(cont) {
+    const scope = stack.current();
+    if (scope.parent && scope.canMangle(cont[1])) {
+      scope.addMangle(cont[1], scope.getMangle());
+    }
     return cont;
   },
   function(cont) {
-    mangle.reset();
+    domap(cont[1]);
     stack.push(cont.scope);
+    domap(cont[3]);
     domap(cont[2]);
     return prog(cont, stack.pop);
   },
   defun(cont) {
-    mangle.reset();
+    domap(cont[1]);
     stack.push(cont.scope);
+    domap(cont[3]);
     domap(cont[2]);
     return prog(cont, stack.pop);
   },
@@ -562,7 +578,7 @@ const makecode = (ast) => {
       if (cont[1].length) {
         ret = 'var ';
         cont[1].forEach((item) => {
-          ret += (scope.hasMangle(item[0]) ? scope.mangle[item[0]] : item[0]) + '=' + domap(item[1]) + ',';
+          ret += (scope.hasMangle(item[0]) ? scope.mangle[item[0]] : item[0]) + (item[1] ? '=' + domap(item[1]) : '') + ',' ;
         });
         ret = ret.slice(0, -1) + ';';
       }
@@ -575,13 +591,13 @@ const makecode = (ast) => {
       const scope = stack.current();
       return scope.hasMangle(cont[1]) ? scope.mangle[cont[1]] : cont[1];
     },
-    defun(cont) {
-      stack.push(cont.scope);
-      const ret = 'function ' + domap(cont[1]) + '(' + domap(cont[3]).join(',') + ')' + domap(cont[2]);
-      return prog(ret, stack.pop);
-    },
     block(cont) {
-      return '{' + split(domap(cont[1])) + '}';
+      const list = domap(cont[1]);
+      let la = '';
+      if (list.length) {
+        la = list.pop().replace(/;$/, '');
+      }
+      return '{' + split(list) + la + '}';
     },
     call(cont) {
       return domap(cont[1]) + '(' + domap(cont[2]) + ')';
@@ -599,14 +615,21 @@ const makecode = (ast) => {
       return 'while' + domap(cont[1]) + domap(cont[2]);
     },
     try(cont) {
-      return 'try' + domap(cont[1]) + (cont[2] ? 'catch(' + cont[2] + ')' + domap(cont[3]) : '') + (cont[3] ? 'finally' + domap(cont[4]) : '');
+      return 'try' + domap(cont[1]) + (cont[2] ? 'catch(' + cont[2] + ')' + domap(cont[3]) : '') + (cont[4] ? 'finally' + domap(cont[4]) : '');
     },
     new(cont) {
       return 'new ' + domap(cont[1]) + (cont[2].length ? `(${domap(cont[2])})` : '');
     },
-    function(cont) { // 在这里判断下是不是到了括号，然后加上分号分割; 其实可以在block那里去判断;判断之前得类型;
+    defun(cont) {
+      const name = domap(cont[1]);
       stack.push(cont.scope);
-      const ret = 'function ' + (cont[1] ? domap(cont[1]) : '') + `(${domap(cont[3])})` + domap(cont[2]);
+      const ret = 'function ' + name + '(' + domap(cont[3]).join(',') + ')' + domap(cont[2]);
+      return prog(ret, stack.pop);
+    },
+    function(cont) { // 在这里判断下是不是到了括号，然后加上分号分割; 其实可以在block那里去判断;判断之前得类型;
+      const name = cont[1] ? domap(cont[1]) : '';
+      stack.push(cont.scope);
+      const ret = `function ${name}(${domap(cont[3])})` + domap(cont[2]);
       return prog(ret, stack.pop);
     },
     return(cont) {
@@ -620,7 +643,7 @@ const makecode = (ast) => {
     },
     object(cont) {
       return '{' + cont[1].map((item) => {
-        return `"${item[0]}":` + domap(item[1]);
+        return (/^\w+$/.test(item[0]) ? `${item[0]}:` : `"${item[0]}":`) + domap(item[1]);
       }).join(',') + '}';
     },
     array(cont) {

@@ -12,16 +12,20 @@ export function hit_obj(obj, prop) {
   return Object.prototype.hasOwnProperty.call(obj, prop);
 }
 
-export function hit_parent(scope, item) {
+export function hit_parent(scope, item, type = ) {
   if (!scope.parent) {
-    // 说明未声明;
+    // 说明未声明, 未声明不做混淆;
     return;
   }
   if (hit_obj(scope.parent.eo, item)) {
-    return scope.parent.ao[item] = true;
+    return scope;
   } else {
     return hit_parent(scope.parent, item);
   }
+}
+
+export function hit_parent_m(scope, item, type = ) {
+
 }
 
 export function is_digit(ch) {
@@ -121,7 +125,7 @@ export function prog(ret, ...args) {
 }
 
 export function last(arr) {
-  return last(arr.length - 1);
+  return arr[arr.length - 1];
 }
 
 

@@ -156,10 +156,12 @@ class tokenizer {
           });
           if (len) ch = this.String.fromCharCode(parseInt(ch, 8));
           else ch = this.read_escaped_char(true);
+
         } else if (ch == quoto) break;
         else if (ch == '\n') throw this.EX_EOF;
         ret += ch;
       }
+
       return this.token('string', ret);
     });
   }
