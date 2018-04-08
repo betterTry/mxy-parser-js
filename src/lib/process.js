@@ -37,7 +37,7 @@ function ast_walker() {
         "string": function(str) {
             return [ this[0], str ];
         },
-        "\u2008": function(num) {
+        "num": function(num) {
             return [ this[0], num ];
         },
         "name": function(name) {
@@ -262,12 +262,12 @@ class Scope {
     return !this.hasMangle(name) && hit_obj(this.ao, name) && hit_obj(this.eo, name);
   }
   addMangle(old, n) {
-    this.mangle[old] = n;
+    return this.mangle[old] = n;
   }
   hasMangle(name) {
     return hit_obj(this.mangle, name);
   }
-  getMangle() {
+  getMangle(not) {
     let base = 54;
     let ret = '';
     let num = this.num;
@@ -277,12 +277,24 @@ class Scope {
       base = 64;
     } while(num > 0);
     this.num++;
+    if (not && ret == not[0]) {
+      not.splice(0, 1);
+      return this.getMangle(not);
+    }
+
     return ret;
+  }
+  hasEo(name) {
+    return hit_obj(this.eo, name);
   }
   addEo(name) {
     this.eo[name] = undefined;
   }
+  addAo(name) {
+    this.ao[name] = true;
+  }
 }
+
 
 const walk = {
   walker: {
@@ -515,11 +527,12 @@ const addao = (ast) => map(ast, walk.setWalker({
   },
   name(cont) {
     const scope = stack.current();
-    if (hit_obj(scope.eo, cont[1])) {
-      scope.ao[cont[1]] = true;
-    } else {
-      hit_parent(scope, cont[1]);
-    }
+    scope.addAo(cont[1]);
+    // if (hit_obj(scope.eo, cont[1])) {
+    //   scope.ao[cont[1]] = true;
+    // } else {
+    //   hit_parent(scope, cont[1]);
+    // }
     return cont;
   },
 }));
@@ -530,35 +543,65 @@ const addao = (ast) => map(ast, walk.setWalker({
  * 混淆的变量在ao中不能存在;
  **/
 const addmangle = (ast) => map(ast, walk.setWalker({
-  var(cont) {
-    const scope = stack.current();
-    scope.parent && cont[1].forEach((item) => {
-      if (scope.canMangle(item[0])) {
-        scope.addMangle(item[0], scope.getMangle());
+  // var(cont) {
+  //   const scope = stack.current();
+  //   scope.parent && cont[1].forEach((item) => {
+  //     if (scope.canMangle(item[0])) {
+  //       scope.addMangle(item[0], scope.getMangle());
+  //     }
+  //     domap(item[1]);
+  //   });
+  //
+  //   return cont;
+  // },
+  // name(cont) {
+  //   const scope = stack.current();
+  //   if (scope.parent && scope.canMangle(cont[1])) {
+  //     scope.addMangle(cont[1], scope.getMangle());
+  //   }
+  //   return cont;
+  // },
+  function(cont) {
+
+    const scope = cont.scope;
+    stack.push(cont.scope);
+    const r = [];
+    Object.keys(scope.ao).forEach((key) => {
+      if (!scope.hasEo(key)) {
+        const par = hit_parent(scope, key);
+        par && r.push(scope.addMangle(par.mangle[key]));
       }
-      domap(item[1]);
+    });
+    Object.keys(scope.eo).forEach((key) => {
+      const a = scope.getMangle(r);
+      console.log(a);
+      scope.addMangle(key, a);
     });
 
-    return cont;
-  },
-  name(cont) {
-    const scope = stack.current();
-    if (scope.parent && scope.canMangle(cont[1])) {
-      scope.addMangle(cont[1], scope.getMangle());
-    }
-    return cont;
-  },
-  function(cont) {
-    domap(cont[1]);
-    stack.push(cont.scope);
-    domap(cont[3]);
+    // domap(cont[1]);
+    // domap(cont[3]);
     domap(cont[2]);
     return prog(cont, stack.pop);
   },
   defun(cont) {
-    domap(cont[1]);
+    let scope = stack.current();
+    scope.addMangle(cont[1][1], scope.getMangle());
+
+    scope = cont.scope;
     stack.push(cont.scope);
-    domap(cont[3]);
+    const r = [];
+    Object.keys(scope.ao).forEach((key) => {
+      if (!scope.hasEo(key)) {
+        const par = hit_parent(scope, key);
+        par && r.push(scope.addMangle(par.mangle[key]));
+      }
+    });
+    Object.keys(scope.eo).forEach((key) => {
+      scope.addMangle(key, scope.getMangle(r));
+    });
+    // domap(cont[1]);
+    // stack.push(cont.scope);
+    // domap(cont[3]);
     domap(cont[2]);
     return prog(cont, stack.pop);
   },
@@ -622,6 +665,8 @@ const makecode = (ast) => {
     },
     defun(cont) {
       const name = domap(cont[1]);
+      console.log(cont[1], stack.current());
+      console.log(name);
       stack.push(cont.scope);
       const ret = 'function ' + name + '(' + domap(cont[3]).join(',') + ')' + domap(cont[2]);
       return prog(ret, stack.pop);

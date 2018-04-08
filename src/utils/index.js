@@ -12,20 +12,16 @@ export function hit_obj(obj, prop) {
   return Object.prototype.hasOwnProperty.call(obj, prop);
 }
 
-export function hit_parent(scope, item, type = ) {
+export function hit_parent(scope, item) {
   if (!scope.parent) {
     // 说明未声明, 未声明不做混淆;
     return;
   }
-  if (hit_obj(scope.parent.eo, item)) {
+  if (hit_obj(scope.parent.mangle, item)) {
     return scope;
   } else {
     return hit_parent(scope.parent, item);
   }
-}
-
-export function hit_parent_m(scope, item, type = ) {
-
 }
 
 export function is_digit(ch) {
